@@ -9,6 +9,7 @@ namespace Q2_Revisions
         private const string LightingFixturesPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Fixtures";
         private const string CaseworkKitchenPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Kitchen";
         private const string CaseworkBathPath    = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
+        private const string GenericModelBathPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Bath";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -205,9 +206,32 @@ namespace Q2_Revisions
 
                 cabinet.ChangeTypeId(newType.Id);
 
-                // Item 16: set cabinet height to 2'-10½" and counter height to 3'-0"
-                SetParamValueInFeet(cabinet, "Cabinet Height", 34.5 / 12.0); // 2'-10.5"
-                SetParamValueInFeet(cabinet, "Counter Height", 3.0);          // 3'-0"
+                // Item 16: set cabinet finish height to 2'-10½"
+                SetParamValueInFeet(cabinet, "Cabinet Height", 34.5 / 12.0);
+            }
+
+            // Replace vanity countertops: --Vanity Counter-- / Type 1 → LD_GM_Counter_Vanity_Top-Mount / Round Lav
+            string counterFamilyName = "LD_GM_Counter_Vanity_Top-Mount";
+            Utils.LoadFamilyFromLibrary(curDoc, GenericModelBathPath, counterFamilyName);
+
+            FamilySymbol newCounterType = Utils.FindFamilySymbol(curDoc, counterFamilyName, "Round Lav");
+            if (newCounterType != null)
+            {
+                if (!newCounterType.IsActive) newCounterType.Activate();
+
+                List<FamilyInstance> countertops = new FilteredElementCollector(curDoc)
+                    .OfClass(typeof(FamilyInstance))
+                    .Cast<FamilyInstance>()
+                    .Where(fi => fi.Symbol.FamilyName == "--Vanity Counter--" && fi.Symbol.Name == "Type 1")
+                    .ToList();
+
+                foreach (FamilyInstance counter in countertops)
+                {
+                    counter.ChangeTypeId(newCounterType.Id);
+
+                    // Item 16: set counter finish height to 3'-0"
+                    SetParamValueInFeet(counter, "Counter Height", 3.0);
+                }
             }
         }
 
