@@ -7,6 +7,8 @@ namespace Q2_Revisions
         private const string SwitchFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Devices";
         private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
         private const string LightingFixturesPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Fixtures";
+        private const string CaseworkKitchenPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Kitchen";
+        private const string CaseworkBathPath    = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -86,6 +88,14 @@ namespace Q2_Revisions
                 }
             }
 
+            // Items 8 & 16: Swap cabinet families and set cabinet/counter heights
+            using (Transaction t = new Transaction(cuDoc, "Update Cabinets"))
+            {
+                t.Start();
+                UpdateCabinets(cuDoc);
+                t.Commit();
+            }
+
             foreach (Room room in bathRooms)
             {
                 // Switch to the floor plan for this room's level before prompting
@@ -158,6 +168,46 @@ namespace Q2_Revisions
 
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
+            }
+        }
+
+        // Items 8 & 16 ------------------------------------------------------------------
+
+        private void UpdateCabinets(Document curDoc)
+        {
+            // Load all new cabinet families from the library
+            foreach (CabinetMapping mapping in CabinetMapping.AllMappings)
+            {
+                string libraryPath = mapping.LibrarySubfolder == "Kitchen"
+                    ? CaseworkKitchenPath
+                    : CaseworkBathPath;
+                Utils.LoadFamilyFromLibrary(curDoc, libraryPath, mapping.NewFamilyName);
+            }
+
+            // Collect all casework instances that match a mapping entry
+            List<FamilyInstance> cabinets = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Casework)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => CabinetMapping.AllMappings.Any(m => m.OldFamilyName == fi.Symbol.FamilyName))
+                .ToList();
+
+            foreach (FamilyInstance cabinet in cabinets)
+            {
+                CabinetMapping mapping = CabinetMapping.AllMappings
+                    .FirstOrDefault(m => m.OldFamilyName == cabinet.Symbol.FamilyName);
+                if (mapping == null) continue;
+
+                // Match on the same type name in the new family
+                FamilySymbol newType = Utils.FindFamilySymbol(curDoc, mapping.NewFamilyName, cabinet.Symbol.Name);
+                if (newType == null) continue;
+                if (!newType.IsActive) newType.Activate();
+
+                cabinet.ChangeTypeId(newType.Id);
+
+                // Item 16: set cabinet height to 2'-10½" and counter height to 3'-0"
+                SetParamValueInFeet(cabinet, "Cabinet Height", 34.5 / 12.0); // 2'-10.5"
+                SetParamValueInFeet(cabinet, "Counter Height", 3.0);          // 3'-0"
             }
         }
 
