@@ -194,7 +194,7 @@ namespace Q2_Revisions
                 ElementId newWallId2 = newWall1Loc.Split(rightParamLocal);
                 if (newWallId2 == ElementId.InvalidElementId) continue;
 
-                // newWall1 is now the stem wall segment — delete it
+                // newWall1 is now the middle wall segment (where the SRO was) — delete it
                 curDoc.Delete(newWallId1);
             }
         }
