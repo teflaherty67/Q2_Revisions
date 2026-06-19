@@ -14,6 +14,14 @@ namespace Q2_Revisions
             UIDocument uidoc = uiapp.ActiveUIDocument;
             Document cuDoc = uidoc.Document;
 
+            // Item 7 pre-check: ask if this is a Terrata plan before running anything
+            TaskDialog td = new TaskDialog("Q2 Revisions – Plan Type");
+            td.MainInstruction = "Is this a Terrata plan?";
+            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Yes – Terrata plan (skip hard surface flooring)");
+            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "No – Apply hard surface flooring to 1st floor");
+            TaskDialogResult planTypeResult = td.Show();
+            bool isTerrata = planTypeResult == TaskDialogResult.CommandLink1;
+
             // Item 1: Replace Shelving / 5 Shelves with LD_GM_Shelving / 4 Shelves
             using (Transaction t = new Transaction(cuDoc, "Update Shelving"))
             {
@@ -65,6 +73,17 @@ namespace Q2_Revisions
                 t.Start();
                 UpdateLivingRoomLights(cuDoc);
                 t.Commit();
+            }
+
+            // Item 7: Hard surface flooring on 1st floor (skip for Terrata plans)
+            if (!isTerrata)
+            {
+                using (Transaction t = new Transaction(cuDoc, "Update Floor Materials"))
+                {
+                    t.Start();
+                    UpdateFloorMaterials(cuDoc);
+                    t.Commit();
+                }
             }
 
             foreach (Room room in bathRooms)
@@ -140,6 +159,59 @@ namespace Q2_Revisions
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
             }
+        }
+
+        // Item 7 -------------------------------------------------------------------------
+
+        private void UpdateFloorMaterials(Document curDoc)
+        {
+            // Identify the first floor as the level with the lowest elevation
+            Level firstFloor = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .OrderBy(l => l.Elevation)
+                .FirstOrDefault();
+
+            if (firstFloor == null) return;
+
+            // Update Floor Finish on all first-floor rooms that are not already Concrete or HS
+            List<Room> firstFloorRooms = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(SpatialElement))
+                .OfType<Room>()
+                .Where(r => r.Location != null && r.LevelId == firstFloor.Id)
+                .ToList();
+
+            foreach (Room room in firstFloorRooms)
+            {
+                Parameter floorFinish = room.LookupParameter("Floor Finish");
+                if (floorFinish == null || floorFinish.IsReadOnly) continue;
+
+                string current = floorFinish.AsString() ?? string.Empty;
+                if (current.Equals("Concrete", StringComparison.OrdinalIgnoreCase) ||
+                    current.Equals("HS", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                floorFinish.Set("HS");
+            }
+
+            // Delete Floor Material break symbols where Floor 1 or Floor 2 = "C"
+            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_FurnitureSystems)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.FamilyName == "Floor Material" && fi.Symbol.Name == "Type 1")
+                .Where(fi =>
+                {
+                    string floor1 = fi.LookupParameter("Floor 1")?.AsString() ?? string.Empty;
+                    string floor2 = fi.LookupParameter("Floor 2")?.AsString() ?? string.Empty;
+                    return floor1.Equals("C", StringComparison.OrdinalIgnoreCase) ||
+                           floor2.Equals("C", StringComparison.OrdinalIgnoreCase);
+                })
+                .Select(fi => fi.Id)
+                .ToList();
+
+            foreach (ElementId id in toDelete)
+                curDoc.Delete(id);
         }
 
         // Item 6 -------------------------------------------------------------------------
