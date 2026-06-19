@@ -54,7 +54,7 @@ namespace Q2_Revisions
             using (Transaction t = new Transaction(cuDoc, "Remove SROs"))
             {
                 t.Start();
-                RemoveSROs(cuDoc, uidoc.ActiveView);
+                RemoveSROs(cuDoc);
                 t.Commit();
             }
 
@@ -135,7 +135,7 @@ namespace Q2_Revisions
 
         // Item 5 -------------------------------------------------------------------------
 
-        private void RemoveSROs(Document curDoc, View activeView)
+        private void RemoveSROs(Document curDoc)
         {
             List<FamilyInstance> sroList = new FilteredElementCollector(curDoc)
                 .OfCategory(BuiltInCategory.OST_Doors)
@@ -148,7 +148,6 @@ namespace Q2_Revisions
                 })
                 .ToList();
 
-            int sroIndex = 0;
             foreach (FamilyInstance sro in sroList)
             {
                 Wall hostWall = sro.Host as Wall;
@@ -160,34 +159,43 @@ namespace Q2_Revisions
                 double width = sro.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
                 if (width <= 0) continue;
 
-                Line wallLine = (hostWall.Location as LocationCurve)?.Curve as Line;
+                LocationCurve wallLocCurve = hostWall.Location as LocationCurve;
+                Line wallLine = wallLocCurve?.Curve as Line;
                 if (wallLine == null) continue;
 
                 XYZ wallDir = wallLine.Direction;
-                // Vector perpendicular to wall in the horizontal plane
-                XYZ wallPerp = new XYZ(-wallDir.Y, wallDir.X, 0).Normalize();
-
                 XYZ leftEdge  = centerPt - wallDir * (width / 2.0);
                 XYZ rightEdge = centerPt + wallDir * (width / 2.0);
 
-                double rpExtent = 2.0; // 2 ft extent on each side of wall
+                // Ensure left/right are ordered along the wall's positive direction
+                double leftParam  = wallLine.Project(leftEdge).Parameter;
+                double rightParam = wallLine.Project(rightEdge).Parameter;
+                if (leftParam > rightParam)
+                {
+                    double tmp = leftParam; leftParam = rightParam; rightParam = tmp;
+                }
 
-                ReferencePlane leftRP = curDoc.Create.NewReferencePlane2(
-                    leftEdge  + wallPerp * rpExtent,
-                    leftEdge  - wallPerp * rpExtent,
-                    wallDir,
-                    activeView);
-                leftRP.Name = $"SRO-{sroIndex}-L";
-
-                ReferencePlane rightRP = curDoc.Create.NewReferencePlane2(
-                    rightEdge + wallPerp * rpExtent,
-                    rightEdge - wallPerp * rpExtent,
-                    wallDir,
-                    activeView);
-                rightRP.Name = $"SRO-{sroIndex}-R";
-
+                // Delete the SRO — wall fills back in
                 curDoc.Delete(sro.Id);
-                sroIndex++;
+
+                // Split at left edge: hostWall → left segment; newWall1 → leftEdge..end
+                ElementId newWallId1 = wallLocCurve.Split(leftParam);
+                if (newWallId1 == ElementId.InvalidElementId) continue;
+
+                Wall newWall1 = curDoc.GetElement(newWallId1) as Wall;
+                if (newWall1 == null) continue;
+
+                // Split at right edge: newWall1 → stem segment; newWall2 → rightEdge..end
+                LocationCurve newWall1Loc = newWall1.Location as LocationCurve;
+                Line newWall1Line = newWall1Loc?.Curve as Line;
+                if (newWall1Line == null) continue;
+
+                double rightParamLocal = newWall1Line.Project(rightEdge).Parameter;
+                ElementId newWallId2 = newWall1Loc.Split(rightParamLocal);
+                if (newWallId2 == ElementId.InvalidElementId) continue;
+
+                // newWall1 is now the stem wall segment — delete it
+                curDoc.Delete(newWallId1);
             }
         }
 
