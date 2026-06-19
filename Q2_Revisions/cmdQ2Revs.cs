@@ -6,6 +6,7 @@ namespace Q2_Revisions
         private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string SwitchFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Devices";
         private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
+        private const string LightingFixturesPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Fixtures";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -55,6 +56,14 @@ namespace Q2_Revisions
             {
                 t.Start();
                 RemoveSROs(cuDoc);
+                t.Commit();
+            }
+
+            // Item 6: Replace ceiling fan and add 6 LED puck lights in living/family room
+            using (Transaction t = new Transaction(cuDoc, "Update Living Room Lights"))
+            {
+                t.Start();
+                UpdateLivingRoomLights(cuDoc);
                 t.Commit();
             }
 
@@ -131,6 +140,62 @@ namespace Q2_Revisions
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
             }
+        }
+
+        // Item 6 -------------------------------------------------------------------------
+
+        private void UpdateLivingRoomLights(Document curDoc)
+        {
+            Utils.LoadFamilyFromLibrary(curDoc, LightingFixturesPath, "LD_LF_None");
+
+            FamilySymbol ceilingFanType = Utils.FindFamilySymbol(curDoc, "LD_LF_None", "Ceiling Fan");
+            FamilySymbol ledType        = Utils.FindFamilySymbol(curDoc, "LD_LF_None", "LED");
+
+            if (ceilingFanType == null || ledType == null) return;
+            if (!ceilingFanType.IsActive) ceilingFanType.Activate();
+            if (!ledType.IsActive) ledType.Activate();
+
+            // 6 puck light offsets: 3' on each axis from the fan center
+            XYZ[] offsets = new[]
+            {
+                new XYZ(-3,  3, 0), // up & left
+                new XYZ( 0,  3, 0), // up
+                new XYZ( 3,  3, 0), // up & right
+                new XYZ( 3, -3, 0), // down & right
+                new XYZ( 0, -3, 0), // down
+                new XYZ(-3, -3, 0), // down & left
+            };
+
+            // Find all LT-No Base / Ceiling Fan instances in Living or Family rooms
+            List<FamilyInstance> fans = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_LightingFixtures)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.FamilyName == "LT-No Base" && fi.Symbol.Name == "Ceiling Fan")
+                .Where(fi => IsLivingRoom(FindRoomContainingPoint(curDoc, (fi.Location as LocationPoint)?.Point)))
+                .ToList();
+
+            foreach (FamilyInstance fan in fans)
+            {
+                XYZ fanPt = (fan.Location as LocationPoint)?.Point;
+                if (fanPt == null) continue;
+
+                Level level = curDoc.GetElement(fan.LevelId) as Level;
+
+                // Replace existing ceiling fan with new family type
+                fan.ChangeTypeId(ceilingFanType.Id);
+
+                // Place 6 LED puck lights around the fan
+                foreach (XYZ offset in offsets)
+                    curDoc.Create.NewFamilyInstance(fanPt + offset, ledType, level, StructuralType.NonStructural);
+            }
+        }
+
+        private bool IsLivingRoom(Room room)
+        {
+            if (room == null) return false;
+            return room.Name.IndexOf("Family",  StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   room.Name.IndexOf("Living",  StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // Item 5 -------------------------------------------------------------------------
