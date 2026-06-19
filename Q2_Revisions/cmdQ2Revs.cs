@@ -5,6 +5,7 @@ namespace Q2_Revisions
     {
         private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string SwitchFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Devices";
+        private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -40,6 +41,14 @@ namespace Q2_Revisions
                 .OrderBy(r => r.Level.Elevation)
                 .ThenBy(r => r.Name)
                 .ToList();
+
+            // Item 4: Replace front doors (Exterior Entry, 36" wide) with new CH/CHP family
+            using (Transaction t = new Transaction(cuDoc, "Update Front Doors"))
+            {
+                t.Start();
+                UpdateFrontDoors(cuDoc);
+                t.Commit();
+            }
 
             foreach (Room room in bathRooms)
             {
@@ -113,6 +122,47 @@ namespace Q2_Revisions
 
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
+            }
+        }
+
+        // Item 4 -------------------------------------------------------------------------
+
+        private void UpdateFrontDoors(Document curDoc)
+        {
+            string newFamilyName = "LD_DR_Ext_Single 3_4 Lite_1 Panel";
+            Utils.LoadFamilyFromLibrary(curDoc, DoorFamilyPath, newFamilyName);
+
+            FamilySymbol type80 = Utils.FindFamilySymbol(curDoc, newFamilyName, "36\"x80\" DL");
+            FamilySymbol type96 = Utils.FindFamilySymbol(curDoc, newFamilyName, "36\"x96\"");
+
+            if (type80 != null && !type80.IsActive) type80.Activate();
+            if (type96 != null && !type96.IsActive) type96.Activate();
+
+            // Find all 36"-wide doors whose type Description contains "Exterior Entry"
+            List<FamilyInstance> frontDoors = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Doors)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(d =>
+                {
+                    string desc = d.Symbol.LookupParameter("Description")?.AsString() ?? string.Empty;
+                    if (desc.IndexOf("Exterior Entry", StringComparison.OrdinalIgnoreCase) < 0)
+                        return false;
+
+                    double width = d.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
+                    return Math.Abs(width - 3.0) < 0.01; // 36" = 3 ft
+                })
+                .ToList();
+
+            foreach (FamilyInstance door in frontDoors)
+            {
+                double height = door.Symbol.LookupParameter("Height")?.AsDouble() ?? 0;
+
+                // 80" = 6.6667 ft, 96" = 8 ft
+                if (Math.Abs(height - (80.0 / 12.0)) < 0.01 && type80 != null)
+                    door.ChangeTypeId(type80.Id);
+                else if (Math.Abs(height - (96.0 / 12.0)) < 0.01 && type96 != null)
+                    door.ChangeTypeId(type96.Id);
             }
         }
 
