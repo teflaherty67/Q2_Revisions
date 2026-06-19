@@ -133,7 +133,7 @@ namespace Q2_Revisions
             Utils.LoadFamilyFromLibrary(curDoc, DoorFamilyPath, newFamilyName);
 
             FamilySymbol type80 = Utils.FindFamilySymbol(curDoc, newFamilyName, "36\"x80\" DL");
-            FamilySymbol type96 = Utils.FindFamilySymbol(curDoc, newFamilyName, "36\"x96\"");
+            FamilySymbol type96 = Utils.FindFamilySymbol(curDoc, newFamilyName, "36\"x96\" DL");
 
             if (type80 != null && !type80.IsActive) type80.Activate();
             if (type96 != null && !type96.IsActive) type96.Activate();
