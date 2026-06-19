@@ -36,8 +36,7 @@ namespace Q2_Revisions
             List<Room> bathRooms = new FilteredElementCollector(cuDoc)
                 .OfClass(typeof(SpatialElement))
                 .OfType<Room>()
-                .Where(r => r.Location != null &&
-                            r.Name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(r => r.Location != null && IsBathRoom(r.Name))
                 .OrderBy(r => r.Level.Elevation)
                 .ThenBy(r => r.Name)
                 .ToList();
@@ -118,6 +117,13 @@ namespace Q2_Revisions
         }
 
         // Item 2 -------------------------------------------------------------------------
+
+        private bool IsBathRoom(string name)
+        {
+            return name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Powder", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Pwdr", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
 
         private ViewPlan GetFloorPlanForLevel(Document curDoc, Level level)
         {
