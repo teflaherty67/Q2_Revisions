@@ -20,7 +20,7 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
-            // Item 2: Load new switch family, then let user pick each bath entry switch
+            // Item 2: Load new switch family
             using (Transaction tLoad = new Transaction(cuDoc, "Load Switch Family"))
             {
                 tLoad.Start();
@@ -32,20 +32,34 @@ namespace Q2_Revisions
             if (newSwitchType == null)
                 return Result.Failed;
 
-            // Selection loop — user picks each bath entry switch; Escape ends the loop
-            while (true)
+            // Get all bath rooms sorted by level elevation, then room name
+            List<Room> bathRooms = new FilteredElementCollector(cuDoc)
+                .OfClass(typeof(SpatialElement))
+                .OfType<Room>()
+                .Where(r => r.Location != null &&
+                            r.Name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(r => r.Level.Elevation)
+                .ThenBy(r => r.Name)
+                .ToList();
+
+            foreach (Room room in bathRooms)
             {
+                // Switch to the floor plan for this room's level before prompting
+                ViewPlan floorPlan = GetFloorPlanForLevel(cuDoc, room.Level);
+                if (floorPlan != null)
+                    uidoc.ActiveView = floorPlan;
+
                 try
                 {
                     Reference pickedRef = uidoc.Selection.PickObject(
                         Autodesk.Revit.UI.Selection.ObjectType.Element,
-                        "Select a bath entry switch — press Escape when done");
+                        $"Pick switch at {room.Name} — press Escape to skip");
 
                     FamilyInstance selectedSwitch = cuDoc.GetElement(pickedRef) as FamilyInstance;
                     if (selectedSwitch == null)
                         continue;
 
-                    using (Transaction t = new Transaction(cuDoc, "Add Bath Switch"))
+                    using (Transaction t = new Transaction(cuDoc, $"Add Bath Switch – {room.Name}"))
                     {
                         t.Start();
                         DuplicateSwitchAndCleanWiring(cuDoc, selectedSwitch, newSwitchType);
@@ -54,7 +68,8 @@ namespace Q2_Revisions
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException)
                 {
-                    break;
+                    // User skipped this bath — continue to the next one
+                    continue;
                 }
             }
 
@@ -104,6 +119,17 @@ namespace Q2_Revisions
 
         // Item 2 -------------------------------------------------------------------------
 
+        private ViewPlan GetFloorPlanForLevel(Document curDoc, Level level)
+        {
+            return new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewPlan))
+                .Cast<ViewPlan>()
+                .FirstOrDefault(v => v.ViewType == ViewType.FloorPlan &&
+                                     !v.IsTemplate &&
+                                     v.GenLevel != null &&
+                                     v.GenLevel.Id == level.Id);
+        }
+
         private void DuplicateSwitchAndCleanWiring(Document curDoc, FamilyInstance existingSwitch, FamilySymbol newSwitchType)
         {
             Wall hostWall = existingSwitch.Host as Wall;
@@ -118,7 +144,6 @@ namespace Q2_Revisions
             if (wallLine == null)
                 return;
 
-            // Offset new switch 4" along the wall in the positive wall direction
             XYZ newPt = swPt + wallLine.Direction * (4.0 / 12.0);
 
             if (!newSwitchType.IsActive)
@@ -126,7 +151,6 @@ namespace Q2_Revisions
 
             curDoc.Create.NewFamilyInstance(newPt, newSwitchType, hostWall, StructuralType.NonStructural);
 
-            // Delete Wiring detail lines in the room that contains the selected switch
             Room switchRoom = FindRoomContainingPoint(curDoc, swPt);
             if (switchRoom != null)
                 DeleteWiringLinesInRoom(curDoc, switchRoom);
