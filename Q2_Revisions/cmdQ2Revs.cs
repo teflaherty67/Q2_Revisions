@@ -8,7 +8,7 @@
             // Revit application and document variables
             UIApplication uiapp = commandData.Application;
             UIDocument uidoc = uiapp.ActiveUIDocument;
-            Document doc = uidoc.Document;
+            Document cuDoc = uidoc.Document;
 
             // Your code goes here
 
