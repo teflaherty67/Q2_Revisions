@@ -50,6 +50,14 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
+            // Item 5: Remove SROs and place reference planes at their edges
+            using (Transaction t = new Transaction(cuDoc, "Remove SROs"))
+            {
+                t.Start();
+                RemoveSROs(cuDoc, uidoc.ActiveView);
+                t.Commit();
+            }
+
             foreach (Room room in bathRooms)
             {
                 // Switch to the floor plan for this room's level before prompting
@@ -122,6 +130,64 @@ namespace Q2_Revisions
 
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
+            }
+        }
+
+        // Item 5 -------------------------------------------------------------------------
+
+        private void RemoveSROs(Document curDoc, View activeView)
+        {
+            List<FamilyInstance> sroList = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Doors)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(d =>
+                {
+                    string comments = d.Symbol.LookupParameter("Type Comments")?.AsString() ?? string.Empty;
+                    return comments.IndexOf("SR", StringComparison.OrdinalIgnoreCase) >= 0;
+                })
+                .ToList();
+
+            int sroIndex = 0;
+            foreach (FamilyInstance sro in sroList)
+            {
+                Wall hostWall = sro.Host as Wall;
+                if (hostWall == null) continue;
+
+                XYZ centerPt = (sro.Location as LocationPoint)?.Point;
+                if (centerPt == null) continue;
+
+                double width = sro.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
+                if (width <= 0) continue;
+
+                Line wallLine = (hostWall.Location as LocationCurve)?.Curve as Line;
+                if (wallLine == null) continue;
+
+                XYZ wallDir = wallLine.Direction;
+                // Vector perpendicular to wall in the horizontal plane
+                XYZ wallPerp = new XYZ(-wallDir.Y, wallDir.X, 0).Normalize();
+
+                XYZ leftEdge  = centerPt - wallDir * (width / 2.0);
+                XYZ rightEdge = centerPt + wallDir * (width / 2.0);
+
+                double rpExtent = 2.0; // 2 ft extent on each side of wall
+
+                ReferencePlane leftRP = curDoc.Create.NewReferencePlane2(
+                    leftEdge  + wallPerp * rpExtent,
+                    leftEdge  - wallPerp * rpExtent,
+                    wallDir,
+                    activeView);
+                leftRP.Name = $"SRO-{sroIndex}-L";
+
+                ReferencePlane rightRP = curDoc.Create.NewReferencePlane2(
+                    rightEdge + wallPerp * rpExtent,
+                    rightEdge - wallPerp * rpExtent,
+                    wallDir,
+                    activeView);
+                rightRP.Name = $"SRO-{sroIndex}-R";
+
+                curDoc.Delete(sro.Id);
+                sroIndex++;
             }
         }
 
