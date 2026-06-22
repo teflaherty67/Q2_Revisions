@@ -97,6 +97,14 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
+            // Item 12: Remove all TV/Phone jacks
+            using (Transaction t = new Transaction(cuDoc, "Remove TV and Phone Jacks"))
+            {
+                t.Start();
+                RemoveTVPhoneJacks(cuDoc);
+                t.Commit();
+            }
+
             foreach (Room room in bathRooms)
             {
                 // Switch to the floor plan for this room's level before prompting
@@ -170,6 +178,32 @@ namespace Q2_Revisions
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
             }
+        }
+
+        // Item 12 -----------------------------------------------------------------------
+
+        private void RemoveTVPhoneJacks(Document curDoc)
+        {
+            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_ElectricalFixtures)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi =>
+                {
+                    string familyName = fi.Symbol.FamilyName;
+                    bool validFamily = familyName.StartsWith("EL-Wall Base", StringComparison.OrdinalIgnoreCase) ||
+                                       familyName.Equals("EL-No Base", StringComparison.OrdinalIgnoreCase);
+                    if (!validFamily) return false;
+
+                    string typeName = fi.Symbol.Name;
+                    return typeName.IndexOf("Telephone",  StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           typeName.IndexOf("Television", StringComparison.OrdinalIgnoreCase) >= 0;
+                })
+                .Select(fi => fi.Id)
+                .ToList();
+
+            foreach (ElementId id in toDelete)
+                curDoc.Delete(id);
         }
 
         // Items 8 & 16 ------------------------------------------------------------------
