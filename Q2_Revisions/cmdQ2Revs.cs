@@ -511,11 +511,12 @@ namespace Q2_Revisions
         {
             Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Ceiling_Items");
 
-            List<FamilySymbol> newTypes = new FilteredElementCollector(curDoc)
+            FamilySymbol baseType = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilySymbol))
                 .Cast<FamilySymbol>()
-                .Where(fs => fs.FamilyName == "LD_GM_Ceiling_Items")
-                .ToList();
+                .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" && fs.Name == "Disp Stair");
+
+            if (baseType == null) return;
 
             List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
@@ -523,30 +524,64 @@ namespace Q2_Revisions
                 .Where(fi => fi.Symbol.FamilyName == "--Ceiling Items--")
                 .ToList();
 
+            // Cache of already-created sized types to avoid duplicating multiple times
+            Dictionary<string, FamilySymbol> sizedTypes = new Dictionary<string, FamilySymbol>();
+
             foreach (FamilyInstance inst in oldInstances)
             {
                 double oldWidth  = inst.Symbol.LookupParameter("Width")?.AsDouble()  ?? 0;
                 double oldLength = inst.Symbol.LookupParameter("Length")?.AsDouble() ?? 0;
 
-                // Match to the new type with the closest Width + Length
-                FamilySymbol bestMatch = newTypes
-                    .OrderBy(fs =>
+                double baseWidth  = baseType.LookupParameter("Width")?.AsDouble()  ?? 0;
+                double baseLength = baseType.LookupParameter("Length")?.AsDouble() ?? 0;
+
+                bool dimensionsMatch = Math.Abs(oldWidth - baseWidth)   < 0.01 &&
+                                       Math.Abs(oldLength - baseLength) < 0.01;
+
+                FamilySymbol targetType;
+
+                if (dimensionsMatch)
+                {
+                    targetType = baseType;
+                }
+                else
+                {
+                    // Build a type name from the actual dimensions in inches
+                    int wInches = (int)Math.Round(oldWidth  * 12);
+                    int lInches = (int)Math.Round(oldLength * 12);
+                    string typeName = $"Disp Stair {wInches}\"x{lInches}\"";
+
+                    if (!sizedTypes.TryGetValue(typeName, out targetType))
                     {
-                        double w = fs.LookupParameter("Width")?.AsDouble()  ?? 0;
-                        double l = fs.LookupParameter("Length")?.AsDouble() ?? 0;
-                        return Math.Abs(w - oldWidth) + Math.Abs(l - oldLength);
-                    })
-                    .FirstOrDefault();
+                        // Check if this type was already created in a previous run
+                        targetType = new FilteredElementCollector(curDoc)
+                            .OfClass(typeof(FamilySymbol))
+                            .Cast<FamilySymbol>()
+                            .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" && fs.Name == typeName);
 
-                if (bestMatch == null) continue;
-                if (!bestMatch.IsActive) bestMatch.Activate();
+                        if (targetType == null)
+                        {
+                            // Duplicate the base type and set the correct dimensions
+                            targetType = baseType.Duplicate(typeName) as FamilySymbol;
+                            if (targetType == null) continue;
 
-                // Enable the Arrow flag on the matched type
-                Parameter arrowParam = bestMatch.LookupParameter("Arrow");
+                            Parameter wp = targetType.LookupParameter("Width");
+                            Parameter lp = targetType.LookupParameter("Length");
+                            if (wp != null && !wp.IsReadOnly) wp.Set(oldWidth);
+                            if (lp != null && !lp.IsReadOnly) lp.Set(oldLength);
+                        }
+
+                        sizedTypes[typeName] = targetType;
+                    }
+                }
+
+                if (!targetType.IsActive) targetType.Activate();
+
+                Parameter arrowParam = targetType.LookupParameter("Arrow");
                 if (arrowParam != null && !arrowParam.IsReadOnly)
                     arrowParam.Set(1);
 
-                inst.ChangeTypeId(bestMatch.Id);
+                inst.ChangeTypeId(targetType.Id);
             }
         }
 
