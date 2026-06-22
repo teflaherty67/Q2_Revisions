@@ -98,6 +98,9 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
+            // Item 14: Move data distribution box to behind utility room door
+            MoveDistributionBox(uidoc);
+
             // Item 13: Update living room data drops to dual Cat6
             using (Transaction t = new Transaction(cuDoc, "Update Data Drops"))
             {
@@ -187,6 +190,125 @@ namespace Q2_Revisions
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
             }
+        }
+
+        // Item 14 -----------------------------------------------------------------------
+
+        private void MoveDistributionBox(UIDocument uidoc)
+        {
+            Document curDoc = uidoc.Document;
+
+            // Switch to the first-floor plan so the box and the utility room are in the same view
+            Level firstFloor = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .OrderBy(l => l.Elevation)
+                .FirstOrDefault();
+
+            ViewPlan firstFloorPlan = GetFloorPlanForLevel(curDoc, firstFloor);
+            if (firstFloorPlan != null)
+                uidoc.ActiveView = firstFloorPlan;
+
+            // User selects the distribution box and all associated elements
+            IList<Reference> selectedRefs;
+            try
+            {
+                selectedRefs = uidoc.Selection.PickObjects(
+                    Autodesk.Revit.UI.Selection.ObjectType.Element,
+                    "Select the distribution box and all associated elements, then press Finish");
+            }
+            catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return; }
+
+            if (selectedRefs == null || selectedRefs.Count == 0) return;
+
+            List<ElementId> selectedIds = selectedRefs.Select(r => r.ElementId).ToList();
+
+            // User clicks the target location behind the utility room door
+            XYZ targetPt;
+            try
+            {
+                targetPt = uidoc.Selection.PickPoint("Click the target location behind the utility room door");
+            }
+            catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return; }
+
+            // Compute bounding box centre of the selected elements
+            XYZ sourceCenter = GetSelectionCenter(curDoc, selectedIds);
+            if (sourceCenter == null) return;
+
+            XYZ moveVector = new XYZ(targetPt.X - sourceCenter.X, targetPt.Y - sourceCenter.Y, 0);
+
+            // Separate wall-hosted instances from everything else
+            List<ElementId>      nonHostedIds    = new List<ElementId>();
+            List<FamilyInstance> hostedInstances = new List<FamilyInstance>();
+
+            foreach (ElementId id in selectedIds)
+            {
+                FamilyInstance fi = curDoc.GetElement(id) as FamilyInstance;
+                if (fi != null && fi.Host is Wall)
+                    hostedInstances.Add(fi);
+                else
+                    nonHostedIds.Add(id);
+            }
+
+            using (Transaction t = new Transaction(curDoc, "Move Distribution Box"))
+            {
+                t.Start();
+
+                // Move all non-hosted elements in one call
+                if (nonHostedIds.Count > 0)
+                    ElementTransformUtils.MoveElements(curDoc, nonHostedIds, moveVector);
+
+                // Re-host wall-hosted elements on the wall nearest the target point
+                Wall targetWall = FindNearestWall(curDoc, targetPt);
+                foreach (FamilyInstance hosted in hostedInstances)
+                {
+                    XYZ oldPt = (hosted.Location as LocationPoint)?.Point;
+                    if (oldPt == null) continue;
+
+                    XYZ newPt = oldPt + moveVector;
+                    FamilySymbol symbol = hosted.Symbol;
+                    if (!symbol.IsActive) symbol.Activate();
+
+                    if (targetWall != null)
+                        curDoc.Create.NewFamilyInstance(newPt, symbol, targetWall, StructuralType.NonStructural);
+                    else
+                        curDoc.Create.NewFamilyInstance(newPt, symbol, StructuralType.NonStructural);
+
+                    curDoc.Delete(hosted.Id);
+                }
+
+                t.Commit();
+            }
+        }
+
+        private XYZ GetSelectionCenter(Document curDoc, List<ElementId> ids)
+        {
+            XYZ min = new XYZ(double.MaxValue, double.MaxValue, double.MaxValue);
+            XYZ max = new XYZ(double.MinValue, double.MinValue, double.MinValue);
+
+            foreach (ElementId id in ids)
+            {
+                BoundingBoxXYZ bb = curDoc.GetElement(id).get_BoundingBox(null);
+                if (bb == null) continue;
+                min = new XYZ(Math.Min(min.X, bb.Min.X), Math.Min(min.Y, bb.Min.Y), Math.Min(min.Z, bb.Min.Z));
+                max = new XYZ(Math.Max(max.X, bb.Max.X), Math.Max(max.Y, bb.Max.Y), Math.Max(max.Z, bb.Max.Z));
+            }
+
+            if (min.X == double.MaxValue) return null;
+            return (min + max) * 0.5;
+        }
+
+        private Wall FindNearestWall(Document curDoc, XYZ point)
+        {
+            return new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Wall))
+                .Cast<Wall>()
+                .OrderBy(w =>
+                {
+                    Line wLine = (w.Location as LocationCurve)?.Curve as Line;
+                    return wLine?.Project(point).Distance ?? double.MaxValue;
+                })
+                .FirstOrDefault();
         }
 
         // Item 13 -----------------------------------------------------------------------
