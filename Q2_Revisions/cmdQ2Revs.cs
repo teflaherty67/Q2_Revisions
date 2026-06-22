@@ -514,7 +514,8 @@ namespace Q2_Revisions
             FamilySymbol baseType = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilySymbol))
                 .Cast<FamilySymbol>()
-                .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" && fs.Name == "Disp Stair");
+                .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" &&
+                                      fs.Name.StartsWith("Disp Stair", StringComparison.OrdinalIgnoreCase));
 
             if (baseType == null) return;
 
