@@ -190,11 +190,6 @@ namespace Q2_Revisions
                 .Cast<FamilyInstance>()
                 .Where(fi =>
                 {
-                    string familyName = fi.Symbol.FamilyName;
-                    bool validFamily = familyName.StartsWith("EL-Wall Base", StringComparison.OrdinalIgnoreCase) ||
-                                       familyName.Equals("EL-No Base", StringComparison.OrdinalIgnoreCase);
-                    if (!validFamily) return false;
-
                     string typeName = fi.Symbol.Name;
                     return typeName.IndexOf("Telephone",  StringComparison.OrdinalIgnoreCase) >= 0 ||
                            typeName.IndexOf("Television", StringComparison.OrdinalIgnoreCase) >= 0;
