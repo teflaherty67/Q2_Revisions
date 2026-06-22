@@ -117,6 +117,14 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
+            // WH-Tstat: Remove water heater thermostat
+            using (Transaction t = new Transaction(cuDoc, "Remove WH Thermostat"))
+            {
+                t.Start();
+                RemoveWHTstat(cuDoc);
+                t.Commit();
+            }
+
             foreach (Room room in bathRooms)
             {
                 // Switch to the floor plan for this room's level before prompting
@@ -333,6 +341,22 @@ namespace Q2_Revisions
                 if (newType == null) continue;
                 drop.ChangeTypeId(newType.Id);
             }
+        }
+
+        // WH-Tstat -----------------------------------------------------------------------
+
+        private void RemoveWHTstat(Document curDoc)
+        {
+            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_ElectricalFixtures)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.Name.Equals("WH-Tstat", StringComparison.OrdinalIgnoreCase))
+                .Select(fi => fi.Id)
+                .ToList();
+
+            foreach (ElementId id in toDelete)
+                curDoc.Delete(id);
         }
 
         // Item 12 -----------------------------------------------------------------------
