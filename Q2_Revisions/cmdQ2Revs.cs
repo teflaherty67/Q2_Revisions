@@ -103,6 +103,14 @@ namespace Q2_Revisions
                 }
             }
 
+            // Ceiling Items: swap --Ceiling Items-- to LD_GM_Ceiling_Items, set Arrow = Yes
+            using (Transaction t = new Transaction(cuDoc, "Update Ceiling Items"))
+            {
+                t.Start();
+                UpdateCeilingItems(cuDoc);
+                t.Commit();
+            }
+
             // Items 8 & 16: Swap cabinet families and set cabinet/counter heights
             using (Transaction t = new Transaction(cuDoc, "Update Cabinets"))
             {
@@ -494,6 +502,51 @@ namespace Q2_Revisions
                     // Item 16: set counter finish height to 3'-0"
                     SetParamValueInFeet(counter, "Counter Height", 3.0);
                 }
+            }
+        }
+
+        // Ceiling Items ------------------------------------------------------------------
+
+        private void UpdateCeilingItems(Document curDoc)
+        {
+            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Ceiling_Items");
+
+            List<FamilySymbol> newTypes = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .Where(fs => fs.FamilyName == "LD_GM_Ceiling_Items")
+                .ToList();
+
+            List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.FamilyName == "--Ceiling Items--")
+                .ToList();
+
+            foreach (FamilyInstance inst in oldInstances)
+            {
+                double oldWidth  = inst.Symbol.LookupParameter("Width")?.AsDouble()  ?? 0;
+                double oldLength = inst.Symbol.LookupParameter("Length")?.AsDouble() ?? 0;
+
+                // Match to the new type with the closest Width + Length
+                FamilySymbol bestMatch = newTypes
+                    .OrderBy(fs =>
+                    {
+                        double w = fs.LookupParameter("Width")?.AsDouble()  ?? 0;
+                        double l = fs.LookupParameter("Length")?.AsDouble() ?? 0;
+                        return Math.Abs(w - oldWidth) + Math.Abs(l - oldLength);
+                    })
+                    .FirstOrDefault();
+
+                if (bestMatch == null) continue;
+                if (!bestMatch.IsActive) bestMatch.Activate();
+
+                // Enable the Arrow flag on the matched type
+                Parameter arrowParam = bestMatch.LookupParameter("Arrow");
+                if (arrowParam != null && !arrowParam.IsReadOnly)
+                    arrowParam.Set(1);
+
+                inst.ChangeTypeId(bestMatch.Id);
             }
         }
 
