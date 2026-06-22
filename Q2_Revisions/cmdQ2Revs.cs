@@ -198,24 +198,14 @@ namespace Q2_Revisions
         {
             Document curDoc = uidoc.Document;
 
-            // Switch to the first-floor plan so the box and the utility room are in the same view
-            Level firstFloor = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Level))
-                .Cast<Level>()
-                .OrderBy(l => l.Elevation)
-                .FirstOrDefault();
-
-            ViewPlan firstFloorPlan = GetFloorPlanForLevel(curDoc, firstFloor);
-            if (firstFloorPlan != null)
-                uidoc.ActiveView = firstFloorPlan;
-
             // User selects the distribution box and all associated elements
+            // (navigate to the correct view first if needed)
             IList<Reference> selectedRefs;
             try
             {
                 selectedRefs = uidoc.Selection.PickObjects(
                     Autodesk.Revit.UI.Selection.ObjectType.Element,
-                    "Select the distribution box and all associated elements, then press Finish");
+                    "Navigate to the distribution box view, select the box and all associated elements, then press Finish");
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return; }
 
@@ -223,11 +213,12 @@ namespace Q2_Revisions
 
             List<ElementId> selectedIds = selectedRefs.Select(r => r.ElementId).ToList();
 
-            // User clicks the target location behind the utility room door
+            // User navigates to the utility room view and clicks the target location
             XYZ targetPt;
             try
             {
-                targetPt = uidoc.Selection.PickPoint("Click the target location behind the utility room door");
+                targetPt = uidoc.Selection.PickPoint(
+                    "Navigate to the utility room view, then click the target location behind the door");
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return; }
 
