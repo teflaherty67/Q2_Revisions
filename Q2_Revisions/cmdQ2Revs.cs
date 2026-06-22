@@ -125,6 +125,14 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
+            // Item 17: Change LED-WP fixtures to LED (non-WP)
+            using (Transaction t = new Transaction(cuDoc, "Update WP Light Fixtures"))
+            {
+                t.Start();
+                UpdateWPLights(cuDoc);
+                t.Commit();
+            }
+
             foreach (Room room in bathRooms)
             {
                 // Switch to the floor plan for this room's level before prompting
@@ -155,6 +163,16 @@ namespace Q2_Revisions
                     continue;
                 }
             }
+
+            // Final reminder notice
+            TaskDialog finalDialog = new TaskDialog("Q2 Revisions – Manual Items Remaining");
+            finalDialog.MainInstruction = "Automated steps complete. The following items require manual attention:";
+            finalDialog.MainContent =
+                "1. CABINETS (Item 8): If the Master Bath vanity is 60\" or longer, revise the cabinet layout to include a 3-drawer bank minimum 12\" wide.\n\n" +
+                "2. ITEMS 10 & 11: These items must be completed manually per the redlines.\n\n" +
+                "3. ITEM 15: Complete per the redlines.\n\n" +
+                "4. WET AREA LIGHTS (Item 17): Any light fixtures that remain over tubs or showers must be moved to outside the wet area.";
+            finalDialog.Show();
 
             return Result.Succeeded;
         }
@@ -341,6 +359,26 @@ namespace Q2_Revisions
                 if (newType == null) continue;
                 drop.ChangeTypeId(newType.Id);
             }
+        }
+
+        // Item 17 -----------------------------------------------------------------------
+
+        private void UpdateWPLights(Document curDoc)
+        {
+            // LD_LF_None is already loaded by UpdateLivingRoomLights; just find the LED type
+            FamilySymbol ledType = Utils.FindFamilySymbol(curDoc, "LD_LF_None", "LED");
+            if (ledType == null) return;
+            if (!ledType.IsActive) ledType.Activate();
+
+            List<FamilyInstance> wpLights = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_LightingFixtures)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.FamilyName == "LT-No Base" && fi.Symbol.Name == "LED-WP")
+                .ToList();
+
+            foreach (FamilyInstance light in wpLights)
+                light.ChangeTypeId(ledType.Id);
         }
 
         // WH-Tstat -----------------------------------------------------------------------
