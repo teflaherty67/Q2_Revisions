@@ -184,7 +184,10 @@ namespace Q2_Revisions
                 "1. CABINETS (Item 8): If the Master Bath vanity is 60\" or longer, revise the cabinet layout to include a 3-drawer bank minimum 12\" wide.\n\n" +
                 "2. ITEMS 10 & 11: These items must be completed manually per the redlines.\n\n" +
                 "3. ITEM 15: Complete per the redlines.\n\n" +
-                "4. WET AREA LIGHTS (Item 17): Any light fixtures that remain over tubs or showers must be moved to outside the wet area.";
+                "4. WET AREA LIGHTS (Item 17): Any light fixtures that remain over tubs or showers must be moved to outside the wet area.\n\n" +
+                "5. COACH LIGHT SWITCH: Verify the coach light switch is located in the Garage.\n\n" +
+                "6. COVERED PORCH LIGHT SWITCH: Verify the covered porch light switch is located in the Entry/Foyer.\n\n" +
+                "7. CROWN MOLDING: Add crown molding to upper cabinets.";
             finalDialog.Show();
 
             return Result.Succeeded;
