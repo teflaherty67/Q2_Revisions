@@ -18,13 +18,18 @@ namespace Q2_Revisions
             UIDocument uidoc = uiapp.ActiveUIDocument;
             Document cuDoc = uidoc.Document;
 
-            // Item 7 pre-check: ask if this is a Terrata plan before running anything
-            TaskDialog td = new TaskDialog("Q2 Revisions – Plan Type");
-            td.MainInstruction = "Is this a Terrata plan?";
-            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Yes – Terrata plan (skip hard surface flooring)");
-            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "No – Apply hard surface flooring to 1st floor");
-            TaskDialogResult planTypeResult = td.Show();
-            bool isTerrata = planTypeResult == TaskDialogResult.CommandLink1;
+            // Pre-check: determine spec level (drives flooring, rear door description, etc.)
+            TaskDialog td = new TaskDialog("Q2 Revisions – Spec Level");
+            td.MainInstruction = "Select spec level:";
+            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Complete Home");
+            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "Complete Home Plus");
+            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink3, "Terrata");
+            TaskDialogResult specResult = td.Show();
+
+            string specLevel;
+            if      (specResult == TaskDialogResult.CommandLink1) specLevel = "Complete Home";
+            else if (specResult == TaskDialogResult.CommandLink2) specLevel = "Complete Home Plus";
+            else                                                   specLevel = "Terrata";
 
             // Item 1: Replace Shelving / 5 Shelves with LD_GM_Shelving / 4 Shelves
             using (Transaction t = new Transaction(cuDoc, "Update Shelving"))
@@ -80,7 +85,7 @@ namespace Q2_Revisions
             }
 
             // Item 7: Hard surface flooring on 1st floor (skip for Terrata plans)
-            if (!isTerrata)
+            if (specLevel != "Terrata")
             {
                 using (Transaction t = new Transaction(cuDoc, "Update Floor Materials"))
                 {
