@@ -68,6 +68,14 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
+            // Rear door: replace based on spec level
+            using (Transaction t = new Transaction(cuDoc, "Update Rear Door"))
+            {
+                t.Start();
+                UpdateRearDoor(cuDoc, specLevel);
+                t.Commit();
+            }
+
             // Item 5: Remove SROs and place reference planes at their edges
             using (Transaction t = new Transaction(cuDoc, "Remove SROs"))
             {
@@ -659,6 +667,51 @@ namespace Q2_Revisions
                 // newWall1 is now the middle wall segment (where the SRO was) — delete it
                 curDoc.Delete(newWallId1);
             }
+        }
+
+        // Rear Door ----------------------------------------------------------------------
+
+        private void UpdateRearDoor(Document curDoc, string specLevel)
+        {
+            string newFamilyName;
+            string newTypeName;
+            double targetWidthFt;
+
+            if (specLevel == "Complete Home")
+            {
+                newFamilyName   = "LD_DR_Ext_Single_Half Lite_2 Panel";
+                newTypeName     = "32\"x80\"";
+                targetWidthFt   = 32.0 / 12.0;
+            }
+            // TODO: add Complete Home Plus and Terrata cases
+            else
+            {
+                return;
+            }
+
+            Utils.LoadFamilyFromLibrary(curDoc, DoorFamilyPath, newFamilyName);
+
+            FamilySymbol newType = Utils.FindFamilySymbol(curDoc, newFamilyName, newTypeName);
+            if (newType == null) return;
+            if (!newType.IsActive) newType.Activate();
+
+            List<FamilyInstance> rearDoors = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Doors)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(d =>
+                {
+                    string desc = d.Symbol.LookupParameter("Description")?.AsString() ?? string.Empty;
+                    if (desc.IndexOf("Exterior Entry", StringComparison.OrdinalIgnoreCase) < 0)
+                        return false;
+
+                    double width = d.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
+                    return Math.Abs(width - targetWidthFt) < 0.01;
+                })
+                .ToList();
+
+            foreach (FamilyInstance door in rearDoors)
+                door.ChangeTypeId(newType.Id);
         }
 
         // Item 4 -------------------------------------------------------------------------
