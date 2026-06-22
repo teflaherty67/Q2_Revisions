@@ -10,6 +10,7 @@ namespace Q2_Revisions
         private const string CaseworkKitchenPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Kitchen";
         private const string CaseworkBathPath    = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
         private const string GenericModelBathPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Bath";
+        private const string ElectricalPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Electrical";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -97,6 +98,14 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
+            // Item 13: Update living room data drops to dual Cat6
+            using (Transaction t = new Transaction(cuDoc, "Update Data Drops"))
+            {
+                t.Start();
+                UpdateDataDrops(cuDoc);
+                t.Commit();
+            }
+
             // Item 12: Remove all TV/Phone jacks
             using (Transaction t = new Transaction(cuDoc, "Remove TV and Phone Jacks"))
             {
@@ -177,6 +186,39 @@ namespace Q2_Revisions
 
                 if (shallowUppers)
                     SetParamInt(oldInstance, "Shallow Uppers", 1);
+            }
+        }
+
+        // Item 13 -----------------------------------------------------------------------
+
+        private void UpdateDataDrops(Document curDoc)
+        {
+            Utils.LoadFamilyFromLibrary(curDoc, ElectricalPath, "LD_DD_Comm_Wall");
+            Utils.LoadFamilyFromLibrary(curDoc, ElectricalPath, "LD_DD_Comm_none");
+
+            FamilySymbol wallType = Utils.FindFamilySymbol(curDoc, "LD_DD_Comm_Wall", "Dual Cat6");
+            FamilySymbol noneType = Utils.FindFamilySymbol(curDoc, "LD_DD_Comm_none", "Dual Cat6");
+
+            if (wallType != null && !wallType.IsActive) wallType.Activate();
+            if (noneType != null && !noneType.IsActive) noneType.Activate();
+
+            List<FamilyInstance> dataDrops = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_ElectricalFixtures)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.Name.Equals("Outlet-Dual Cat5e-Cat6", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (FamilyInstance drop in dataDrops)
+            {
+                string familyName = drop.Symbol.FamilyName;
+
+                FamilySymbol newType = familyName.StartsWith("EL-Wall Base", StringComparison.OrdinalIgnoreCase)
+                    ? wallType
+                    : noneType;
+
+                if (newType == null) continue;
+                drop.ChangeTypeId(newType.Id);
             }
         }
 
