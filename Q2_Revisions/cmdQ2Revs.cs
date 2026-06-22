@@ -365,7 +365,7 @@ namespace Q2_Revisions
 
         private void UpdateWPLights(Document curDoc)
         {
-            // LD_LF_None is already loaded by UpdateLivingRoomLights; just find the LED type
+            Utils.LoadFamilyFromLibrary(curDoc, LightingFixturesPath, "LD_LF_None");
             FamilySymbol ledType = Utils.FindFamilySymbol(curDoc, "LD_LF_None", "LED");
             if (ledType == null) return;
             if (!ledType.IsActive) ledType.Activate();
