@@ -195,7 +195,8 @@ namespace Q2_Revisions
                 "4. WET AREA LIGHTS (Item 17): Any light fixtures that remain over tubs or showers must be moved to outside the wet area.\n\n" +
                 "5. COACH LIGHT SWITCH: Verify the coach light switch is located in the Garage.\n\n" +
                 "6. COVERED PORCH LIGHT SWITCH: Verify the covered porch light switch is located in the Entry/Foyer.\n\n" +
-                "7. CROWN MOLDING: Add crown molding to upper cabinets.";
+                "7. CROWN MOLDING: Add crown molding to upper cabinets.\n\n" +
+                "8. EAVE DETAIL: Update eave detail to show fully encapsulated attic insulation.";
             finalDialog.Show();
 
             return Result.Succeeded;
