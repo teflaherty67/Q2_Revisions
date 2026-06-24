@@ -52,11 +52,11 @@ namespace Q2_Revisions
                 return Result.Failed;
 
             // Get all bath rooms sorted by level elevation, then room name
-            List<Room> bathRooms = new FilteredElementCollector(cuDoc)
+            List<SpatialElement> bathRooms = new FilteredElementCollector(cuDoc)
                 .OfClass(typeof(SpatialElement))
-                .OfType<Room>()
+                .Cast<SpatialElement>()
                 .Where(r => r.Location != null && IsBathRoom(r.Name))
-                .OrderBy(r => r.Level.Elevation)
+                .OrderBy(r => (cuDoc.GetElement(r.LevelId) as Level)?.Elevation ?? 0)
                 .ThenBy(r => r.Name)
                 .ToList();
 
@@ -154,10 +154,11 @@ namespace Q2_Revisions
                 t.Commit();
             }
 
-            foreach (Room room in bathRooms)
+            foreach (SpatialElement room in bathRooms)
             {
                 // Switch to the floor plan for this room's level before prompting
-                ViewPlan floorPlan = GetFloorPlanForLevel(cuDoc, room.Level);
+                Level roomLevel = cuDoc.GetElement(room.LevelId) as Level;
+                ViewPlan floorPlan = GetFloorPlanForLevel(cuDoc, roomLevel);
                 if (floorPlan != null)
                     uidoc.ActiveView = floorPlan;
 
@@ -312,9 +313,9 @@ namespace Q2_Revisions
                     if (!symbol.IsActive) symbol.Activate();
 
                     if (targetWall != null)
-                        curDoc.Create.NewFamilyInstance(newPt, symbol, targetWall, StructuralType.NonStructural);
+                        curDoc.Create.NewFamilyInstance(newPt, symbol, targetWall, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
                     else
-                        curDoc.Create.NewFamilyInstance(newPt, symbol, StructuralType.NonStructural);
+                        curDoc.Create.NewFamilyInstance(newPt, symbol, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
 
                     curDoc.Delete(hosted.Id);
                 }
@@ -601,13 +602,13 @@ namespace Q2_Revisions
             if (firstFloor == null) return;
 
             // Update Floor Finish on all first-floor rooms that are not already Concrete or HS
-            List<Room> firstFloorRooms = new FilteredElementCollector(curDoc)
+            List<SpatialElement> firstFloorRooms = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(SpatialElement))
-                .OfType<Room>()
+                .Cast<SpatialElement>()
                 .Where(r => r.Location != null && r.LevelId == firstFloor.Id)
                 .ToList();
 
-            foreach (Room room in firstFloorRooms)
+            foreach (SpatialElement room in firstFloorRooms)
             {
                 Parameter floorFinish = room.LookupParameter("Floor Finish");
                 if (floorFinish == null || floorFinish.IsReadOnly) continue;
@@ -685,11 +686,11 @@ namespace Q2_Revisions
 
                 // Place 6 LED puck lights around the fan
                 foreach (XYZ offset in offsets)
-                    curDoc.Create.NewFamilyInstance(fanPt + offset, ledType, level, StructuralType.NonStructural);
+                    curDoc.Create.NewFamilyInstance(fanPt + offset, ledType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
             }
         }
 
-        private bool IsLivingRoom(Room room)
+        private bool IsLivingRoom(SpatialElement room)
         {
             if (room == null) return false;
             return room.Name.IndexOf("Family",  StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -741,21 +742,22 @@ namespace Q2_Revisions
                 // Delete the SRO — wall fills back in
                 curDoc.Delete(sro.Id);
 
-                // Split at left edge: hostWall → left segment; newWall1 → leftEdge..end
-                ElementId newWallId1 = wallLocCurve.Split(leftParam);
-                if (newWallId1 == ElementId.InvalidElementId) continue;
+                // Split at left edge: hostWall → left segment; splitIds1[0] → leftEdge..end
+                IList<ElementId> splitIds1 = wallLocCurve.Split(new List<double> { leftParam });
+                if (splitIds1 == null || splitIds1.Count == 0) continue;
+                ElementId newWallId1 = splitIds1[0];
 
                 Wall newWall1 = curDoc.GetElement(newWallId1) as Wall;
                 if (newWall1 == null) continue;
 
-                // Split at right edge: newWall1 → stem segment; newWall2 → rightEdge..end
+                // Split at right edge: newWall1 → middle segment; splitIds2[0] → rightEdge..end
                 LocationCurve newWall1Loc = newWall1.Location as LocationCurve;
                 Line newWall1Line = newWall1Loc?.Curve as Line;
                 if (newWall1Line == null) continue;
 
                 double rightParamLocal = newWall1Line.Project(rightEdge).Parameter;
-                ElementId newWallId2 = newWall1Loc.Split(rightParamLocal);
-                if (newWallId2 == ElementId.InvalidElementId) continue;
+                IList<ElementId> splitIds2 = newWall1Loc.Split(new List<double> { rightParamLocal });
+                if (splitIds2 == null || splitIds2.Count == 0) continue;
 
                 // newWall1 is now the middle wall segment (where the SRO was) — delete it
                 curDoc.Delete(newWallId1);
@@ -887,23 +889,30 @@ namespace Q2_Revisions
             if (!newSwitchType.IsActive)
                 newSwitchType.Activate();
 
-            curDoc.Create.NewFamilyInstance(newPt, newSwitchType, hostWall, StructuralType.NonStructural);
+            curDoc.Create.NewFamilyInstance(newPt, newSwitchType, hostWall, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
 
-            Room switchRoom = FindRoomContainingPoint(curDoc, swPt);
+            SpatialElement switchRoom = FindRoomContainingPoint(curDoc, swPt);
             if (switchRoom != null)
                 DeleteWiringLinesInRoom(curDoc, switchRoom);
         }
 
-        private Room FindRoomContainingPoint(Document curDoc, XYZ point)
+        private SpatialElement FindRoomContainingPoint(Document curDoc, XYZ point)
         {
+            if (point == null) return null;
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(SpatialElement))
-                .OfType<Room>()
-                .FirstOrDefault(r => r.Location != null &&
-                    r.IsPointInRoom(new XYZ(point.X, point.Y, r.Level.Elevation + 1.0)));
+                .Cast<SpatialElement>()
+                .FirstOrDefault(r =>
+                {
+                    if (r.Location == null) return false;
+                    var room = r as Autodesk.Revit.DB.Architecture.Room;
+                    if (room == null) return false;
+                    double elev = (curDoc.GetElement(r.LevelId) as Level)?.Elevation ?? 0;
+                    return room.IsPointInRoom(new XYZ(point.X, point.Y, elev + 1.0));
+                });
         }
 
-        private void DeleteWiringLinesInRoom(Document curDoc, Room room)
+        private void DeleteWiringLinesInRoom(Document curDoc, SpatialElement room)
         {
             GraphicsStyle wiringStyle = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(GraphicsStyle))
@@ -913,6 +922,10 @@ namespace Q2_Revisions
             if (wiringStyle == null)
                 return;
 
+            var revitRoom = room as Autodesk.Revit.DB.Architecture.Room;
+            if (revitRoom == null) return;
+            double roomElev = (curDoc.GetElement(room.LevelId) as Level)?.Elevation ?? 0;
+
             List<ElementId> toDelete = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(CurveElement))
                 .OfType<DetailLine>()
@@ -920,7 +933,7 @@ namespace Q2_Revisions
                 .Where(dl =>
                 {
                     XYZ mid = dl.GeometryCurve.Evaluate(0.5, true);
-                    return room.IsPointInRoom(new XYZ(mid.X, mid.Y, room.Level.Elevation + 1.0));
+                    return revitRoom.IsPointInRoom(new XYZ(mid.X, mid.Y, roomElev + 1.0));
                 })
                 .Select(dl => dl.Id)
                 .ToList();
