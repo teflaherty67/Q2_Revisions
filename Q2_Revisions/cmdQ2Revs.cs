@@ -1,627 +1,140 @@
+using Q2_Revisions.Common;
+
 namespace Q2_Revisions
 {
     [Transaction(TransactionMode.Manual)]
     public class cmdQ2Revs : IExternalCommand
     {
+        // set variables for file paths
         private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
-        private const string SwitchFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Devices";
-        private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
-        private const string LightingFixturesPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Lighting\Fixtures";
-        private const string CaseworkKitchenPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Kitchen";
-        private const string CaseworkBathPath    = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
-        private const string GenericModelBathPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Bath";
-        private const string ElectricalPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Electrical";
+        private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             UIApplication uiapp = commandData.Application;
             UIDocument uidoc = uiapp.ActiveUIDocument;
-            Document cuDoc = uidoc.Document;
+            Document curDoc = uidoc.Document;
 
-            // Pre-check: determine spec level (drives flooring, rear door description, etc.)
-            TaskDialog td = new TaskDialog("Q2 Revisions – Spec Level");
-            td.MainInstruction = "Select spec level:";
-            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Complete Home");
-            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "Complete Home Plus");
-            td.AddCommandLink(TaskDialogCommandLinkId.CommandLink3, "Terrata");
-            TaskDialogResult specResult = td.Show();
+            // create & set required variables for the command
+            string planName = curDoc.ProjectInformation.LookupParameter("Plan Name")?.AsString() ?? curDoc.Title;
 
-            string specLevel;
-            if      (specResult == TaskDialogResult.CommandLink1) specLevel = "Complete Home";
-            else if (specResult == TaskDialogResult.CommandLink2) specLevel = "Complete Home Plus";
-            else                                                   specLevel = "Terrata";
 
-            // Item 1: Replace Shelving / 5 Shelves with LD_GM_Shelving / 4 Shelves
-            using (Transaction t = new Transaction(cuDoc, "Update Shelving"))
+            // launch the form to get user input for spec level
+            frmQ2Revs curForm = new frmQ2Revs();
+            curForm.ShowDialog();
+
+            // create & set variables for the spec level selected by the user
+            string specLevel = curForm.SpecLevel;
+
+            // null check for spec level selection
+            if (specLevel == null)
+                return Result.Cancelled;
+
+            #region Floor Plan Revisions
+
+            // set the active view to the First Floor Plan
+            View annotationView = GetFirstFloorAnnotationView(curDoc);
+            if (annotationView != null)
+                uidoc.ActiveView = annotationView;
+
+            #region Revision 1: update 5-stack shelving to 4-stack shelving
+
+            // create variables for shelving count
+            int shelfCount = 0;
+
+            // create a transaction
+            using (Transaction t1 = new Transaction(curDoc, "Update Shelving"))
             {
-                t.Start();
-                UpdateShelving(cuDoc);
-                t.Commit();
+                // start the transaction
+                t1.Start();
+
+                // call the method to update the shelving family
+                shelfCount = UpdateShelving(curDoc);
+
+                // commit the transaction
+                t1.Commit();
             }
 
-            // Item 2: Load new switch family
-            using (Transaction tLoad = new Transaction(cuDoc, "Load Switch Family"))
-            {
-                tLoad.Start();
-                Utils.LoadFamilyFromLibrary(cuDoc, SwitchFamilyPath, "LD_LD_Switch-Wall");
-                tLoad.Commit();
-            }
+            // notify the user shelf update complete
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Shelving",
+               $"{shelfCount} shelf stack(s) were updated to 4 Shelves.");
 
-            FamilySymbol newSwitchType = Utils.FindFamilySymbol(cuDoc, "LD_LD_Switch-Wall", "Switch");
-            if (newSwitchType == null)
-                return Result.Failed;
+            #endregion
 
-            // Get all bath rooms sorted by level elevation, then room name
-            List<SpatialElement> bathRooms = new FilteredElementCollector(cuDoc)
-                .OfClass(typeof(SpatialElement))
-                .Cast<SpatialElement>()
-                .Where(r => r.Location != null && IsBathRoom(r.Name))
-                .OrderBy(r => (cuDoc.GetElement(r.LevelId) as Level)?.Elevation ?? 0)
-                .ThenBy(r => r.Name)
-                .ToList();
+            #region Revision 2: HS at First Floor (except Terrata)
 
-            // Item 4: Replace front doors (Exterior Entry, 36" wide) with new CH/CHP family
-            using (Transaction t = new Transaction(cuDoc, "Update Front Doors"))
-            {
-                t.Start();
-                UpdateFrontDoors(cuDoc);
-                t.Commit();
-            }
+            // create variable for rooms where floor finish was updated
+            List<string> updatedRooms = new List<string>();
 
-            // Rear door: replace based on spec level
-            using (Transaction t = new Transaction(cuDoc, "Update Rear Door"))
-            {
-                t.Start();
-                UpdateRearDoor(cuDoc, specLevel);
-                t.Commit();
-            }
-
-            // Item 5: Remove SROs and place reference planes at their edges
-            using (Transaction t = new Transaction(cuDoc, "Remove SROs"))
-            {
-                t.Start();
-                RemoveSROs(cuDoc);
-                t.Commit();
-            }
-
-            // Item 6: Replace ceiling fan and add 6 LED puck lights in living/family room
-            using (Transaction t = new Transaction(cuDoc, "Update Living Room Lights"))
-            {
-                t.Start();
-                UpdateLivingRoomLights(cuDoc);
-                t.Commit();
-            }
-
-            // Item 7: Hard surface flooring on 1st floor (skip for Terrata plans)
+            // check value of specLevel and only update floor materials if not Terrata
             if (specLevel != "Terrata")
             {
-                using (Transaction t = new Transaction(cuDoc, "Update Floor Materials"))
+                // create a transaction
+                using (Transaction t2 = new Transaction(curDoc, "Update Floor Materials"))
                 {
-                    t.Start();
-                    UpdateFloorMaterials(cuDoc);
-                    t.Commit();
+                    // start the transaction
+                    t2.Start();
+
+                    // call the method to update floor materials
+                    updatedRooms =UpdateFloorMaterials(curDoc);
+
+                    // commit the transaction
+                    t2.Commit();
                 }
+
+                // create notificaiotn message
+                string flooringMsg = updatedRooms.Count == 0
+                   ? "The flooring in all First Floor rooms is already HS."
+                   : $"The flooring was changed in the following {updatedRooms.Count} room(s):\n" +
+                     string.Join("\n", updatedRooms.Select(r => $"• {r}"));
+
+                // notify the user of flooring updates
+                Utils.TaskDialogInformation("Q2 Revisions", "Update Floor Materials", flooringMsg);
             }
 
-            // Ceiling Items: swap --Ceiling Items-- to LD_GM_Ceiling_Items, set Arrow = Yes
-            using (Transaction t = new Transaction(cuDoc, "Update Ceiling Items"))
-            {
-                t.Start();
-                UpdateCeilingItems(cuDoc);
-                t.Commit();
-            }
+            #endregion
 
-            // Items 8 & 16: Swap cabinet families and set cabinet/counter heights
-            using (Transaction t = new Transaction(cuDoc, "Update Cabinets"))
-            {
-                t.Start();
-                UpdateCabinets(cuDoc);
-                t.Commit();
-            }
+            #endregion
 
-            // Item 14: Move data distribution box to behind utility room door
-            MoveDistributionBox(uidoc);
-
-            // Item 13: Update living room data drops to dual Cat6
-            using (Transaction t = new Transaction(cuDoc, "Update Data Drops"))
-            {
-                t.Start();
-                UpdateDataDrops(cuDoc);
-                t.Commit();
-            }
-
-            // Item 12: Remove all TV/Phone jacks
-            using (Transaction t = new Transaction(cuDoc, "Remove TV and Phone Jacks"))
-            {
-                t.Start();
-                RemoveTVPhoneJacks(cuDoc);
-                t.Commit();
-            }
-
-            // WH-Tstat: Remove water heater thermostat
-            using (Transaction t = new Transaction(cuDoc, "Remove WH Thermostat"))
-            {
-                t.Start();
-                RemoveWHTstat(cuDoc);
-                t.Commit();
-            }
-
-            // Item 17: Change LED-WP fixtures to LED (non-WP)
-            using (Transaction t = new Transaction(cuDoc, "Update WP Light Fixtures"))
-            {
-                t.Start();
-                UpdateWPLights(cuDoc);
-                t.Commit();
-            }
-
-            foreach (SpatialElement room in bathRooms)
-            {
-                // Switch to the floor plan for this room's level before prompting
-                Level roomLevel = cuDoc.GetElement(room.LevelId) as Level;
-                ViewPlan floorPlan = GetFloorPlanForLevel(cuDoc, roomLevel);
-                if (floorPlan != null)
-                    uidoc.ActiveView = floorPlan;
-
-                try
-                {
-                    Reference pickedRef = uidoc.Selection.PickObject(
-                        Autodesk.Revit.UI.Selection.ObjectType.Element,
-                        $"Pick switch at {room.Name} — press Escape to skip");
-
-                    FamilyInstance selectedSwitch = cuDoc.GetElement(pickedRef) as FamilyInstance;
-                    if (selectedSwitch == null)
-                        continue;
-
-                    using (Transaction t = new Transaction(cuDoc, $"Add Bath Switch – {room.Name}"))
-                    {
-                        t.Start();
-                        DuplicateSwitchAndCleanWiring(cuDoc, selectedSwitch, newSwitchType);
-                        t.Commit();
-                    }
-                }
-                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
-                {
-                    // User skipped this bath — continue to the next one
-                    continue;
-                }
-            }
-
-            // Final reminder notice
-            TaskDialog finalDialog = new TaskDialog("Q2 Revisions – Manual Items Remaining");
-            finalDialog.MainInstruction = "Automated steps complete. The following items require manual attention:";
-            finalDialog.MainContent =
-                "1. CABINETS (Item 8): If the Master Bath vanity is 60\" or longer, revise the cabinet layout to include a 3-drawer bank minimum 12\" wide.\n\n" +
-                "2. ITEMS 10 & 11: These items must be completed manually per the redlines.\n\n" +
-                "3. ITEM 15: Complete per the redlines.\n\n" +
-                "4. WET AREA LIGHTS (Item 17): Any light fixtures that remain over tubs or showers must be moved to outside the wet area.\n\n" +
-                "5. COACH LIGHT SWITCH: Verify the coach light switch is located in the Garage.\n\n" +
-                "6. COVERED PORCH LIGHT SWITCH: Verify the covered porch light switch is located in the Entry/Foyer.\n\n" +
-                "7. CROWN MOLDING: Add crown molding to upper cabinets.\n\n" +
-                "8. EAVE DETAIL: Update eave detail to show fully encapsulated attic insulation.";
-            finalDialog.Show();
+            // notify the user of results
+            Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete",
+                $"Q2 Revisions completed. Refer to {planName}.txt file for revisions to complete manually.");
 
             return Result.Succeeded;
         }
 
-        // Item 1 -------------------------------------------------------------------------
-
-        private void UpdateShelving(Document curDoc)
+        private List<string> UpdateFloorMaterials(Document curDoc)
         {
-            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
+            List<string> updatedRooms = new List<string>();
 
-            FamilySymbol newShelvingType = Utils.FindFamilySymbol(curDoc, "LD_GM_Shelving", "4 Shelves");
-            if (newShelvingType == null)
-                return;
-
-            if (!newShelvingType.IsActive)
-                newShelvingType.Activate();
-
-            List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "Shelving" && fi.Symbol.Name == "5 Shelves")
-                .ToList();
-
-            foreach (FamilyInstance oldInstance in oldInstances)
-            {
-                double depth1 = GetParamValueInFeet(oldInstance, "Depth1");
-                double depth2 = GetParamValueInFeet(oldInstance, "Depth2");
-                double depth3 = GetParamValueInFeet(oldInstance, "Depth3");
-                double depth4 = GetParamValueInFeet(oldInstance, "Depth4");
-                double depth5 = GetParamValueInFeet(oldInstance, "Depth5");
-
-                bool shallowUppers = depth4 < depth3 || depth5 < depth3;
-
-                oldInstance.ChangeTypeId(newShelvingType.Id);
-
-                SetParamValueInFeet(oldInstance, "Depth1", depth1);
-                SetParamValueInFeet(oldInstance, "Depth2", depth2);
-                SetParamValueInFeet(oldInstance, "Depth3", depth3);
-                SetParamValueInFeet(oldInstance, "Depth4", depth4);
-
-                if (shallowUppers)
-                    SetParamInt(oldInstance, "Shallow Uppers", 1);
-            }
-        }
-
-        // Item 14 -----------------------------------------------------------------------
-
-        private void MoveDistributionBox(UIDocument uidoc)
-        {
-            Document curDoc = uidoc.Document;
-
-            // User selects the distribution box and all associated elements
-            // (navigate to the correct view first if needed)
-            IList<Reference> selectedRefs;
-            try
-            {
-                selectedRefs = uidoc.Selection.PickObjects(
-                    Autodesk.Revit.UI.Selection.ObjectType.Element,
-                    "Navigate to the distribution box view, select the box and all associated elements, then press Finish");
-            }
-            catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return; }
-
-            if (selectedRefs == null || selectedRefs.Count == 0) return;
-
-            List<ElementId> selectedIds = selectedRefs.Select(r => r.ElementId).ToList();
-
-            // User navigates to the utility room view and clicks the target location
-            XYZ targetPt;
-            try
-            {
-                targetPt = uidoc.Selection.PickPoint(
-                    "Navigate to the utility room view, then click the target location behind the door");
-            }
-            catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return; }
-
-            // Compute bounding box centre of the selected elements
-            XYZ sourceCenter = GetSelectionCenter(curDoc, selectedIds);
-            if (sourceCenter == null) return;
-
-            XYZ moveVector = new XYZ(targetPt.X - sourceCenter.X, targetPt.Y - sourceCenter.Y, 0);
-
-            // Separate wall-hosted instances from everything else
-            List<ElementId>      nonHostedIds    = new List<ElementId>();
-            List<FamilyInstance> hostedInstances = new List<FamilyInstance>();
-
-            foreach (ElementId id in selectedIds)
-            {
-                FamilyInstance fi = curDoc.GetElement(id) as FamilyInstance;
-                if (fi != null && fi.Host is Wall)
-                    hostedInstances.Add(fi);
-                else
-                    nonHostedIds.Add(id);
-            }
-
-            using (Transaction t = new Transaction(curDoc, "Move Distribution Box"))
-            {
-                t.Start();
-
-                // Move all non-hosted elements in one call
-                if (nonHostedIds.Count > 0)
-                    ElementTransformUtils.MoveElements(curDoc, nonHostedIds, moveVector);
-
-                // Re-host wall-hosted elements on the wall nearest the target point
-                Wall targetWall = FindNearestWall(curDoc, targetPt);
-                foreach (FamilyInstance hosted in hostedInstances)
-                {
-                    XYZ oldPt = (hosted.Location as LocationPoint)?.Point;
-                    if (oldPt == null) continue;
-
-                    XYZ newPt = oldPt + moveVector;
-                    FamilySymbol symbol = hosted.Symbol;
-                    if (!symbol.IsActive) symbol.Activate();
-
-                    if (targetWall != null)
-                        curDoc.Create.NewFamilyInstance(newPt, symbol, targetWall, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                    else
-                        curDoc.Create.NewFamilyInstance(newPt, symbol, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-
-                    curDoc.Delete(hosted.Id);
-                }
-
-                t.Commit();
-            }
-        }
-
-        private XYZ GetSelectionCenter(Document curDoc, List<ElementId> ids)
-        {
-            XYZ min = new XYZ(double.MaxValue, double.MaxValue, double.MaxValue);
-            XYZ max = new XYZ(double.MinValue, double.MinValue, double.MinValue);
-
-            foreach (ElementId id in ids)
-            {
-                BoundingBoxXYZ bb = curDoc.GetElement(id).get_BoundingBox(null);
-                if (bb == null) continue;
-                min = new XYZ(Math.Min(min.X, bb.Min.X), Math.Min(min.Y, bb.Min.Y), Math.Min(min.Z, bb.Min.Z));
-                max = new XYZ(Math.Max(max.X, bb.Max.X), Math.Max(max.Y, bb.Max.Y), Math.Max(max.Z, bb.Max.Z));
-            }
-
-            if (min.X == double.MaxValue) return null;
-            return (min + max) * 0.5;
-        }
-
-        private Wall FindNearestWall(Document curDoc, XYZ point)
-        {
-            return new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Wall))
-                .Cast<Wall>()
-                .OrderBy(w =>
-                {
-                    Line wLine = (w.Location as LocationCurve)?.Curve as Line;
-                    return wLine?.Project(point).Distance ?? double.MaxValue;
-                })
-                .FirstOrDefault();
-        }
-
-        // Item 13 -----------------------------------------------------------------------
-
-        private void UpdateDataDrops(Document curDoc)
-        {
-            Utils.LoadFamilyFromLibrary(curDoc, ElectricalPath, "LD_DD_Comm_Wall");
-            Utils.LoadFamilyFromLibrary(curDoc, ElectricalPath, "LD_DD_Comm_none");
-
-            FamilySymbol wallType = Utils.FindFamilySymbol(curDoc, "LD_DD_Comm_Wall", "Dual Cat6");
-            FamilySymbol noneType = Utils.FindFamilySymbol(curDoc, "LD_DD_Comm_none", "Dual Cat6");
-
-            if (wallType != null && !wallType.IsActive) wallType.Activate();
-            if (noneType != null && !noneType.IsActive) noneType.Activate();
-
-            List<FamilyInstance> dataDrops = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_ElectricalFixtures)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.Name.Equals("Outlet-Dual Cat5e-Cat6", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            foreach (FamilyInstance drop in dataDrops)
-            {
-                string familyName = drop.Symbol.FamilyName;
-
-                FamilySymbol newType = familyName.StartsWith("EL-Wall Base", StringComparison.OrdinalIgnoreCase)
-                    ? wallType
-                    : noneType;
-
-                if (newType == null) continue;
-                drop.ChangeTypeId(newType.Id);
-            }
-        }
-
-        // Item 17 -----------------------------------------------------------------------
-
-        private void UpdateWPLights(Document curDoc)
-        {
-            Utils.LoadFamilyFromLibrary(curDoc, LightingFixturesPath, "LD_LF_None");
-            FamilySymbol ledType = Utils.FindFamilySymbol(curDoc, "LD_LF_None", "LED");
-            if (ledType == null) return;
-            if (!ledType.IsActive) ledType.Activate();
-
-            List<FamilyInstance> wpLights = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_LightingFixtures)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "LT-No Base" && fi.Symbol.Name == "LED-WP")
-                .ToList();
-
-            foreach (FamilyInstance light in wpLights)
-                light.ChangeTypeId(ledType.Id);
-        }
-
-        // WH-Tstat -----------------------------------------------------------------------
-
-        private void RemoveWHTstat(Document curDoc)
-        {
-            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_ElectricalFixtures)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.Name.Equals("WH-Tstat", StringComparison.OrdinalIgnoreCase))
-                .Select(fi => fi.Id)
-                .ToList();
-
-            foreach (ElementId id in toDelete)
-                curDoc.Delete(id);
-        }
-
-        // Item 12 -----------------------------------------------------------------------
-
-        private void RemoveTVPhoneJacks(Document curDoc)
-        {
-            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_ElectricalFixtures)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi =>
-                {
-                    string typeName = fi.Symbol.Name;
-                    return typeName.IndexOf("Telephone",  StringComparison.OrdinalIgnoreCase) >= 0 ||
-                           typeName.IndexOf("Television", StringComparison.OrdinalIgnoreCase) >= 0;
-                })
-                .Select(fi => fi.Id)
-                .ToList();
-
-            foreach (ElementId id in toDelete)
-                curDoc.Delete(id);
-        }
-
-        // Items 8 & 16 ------------------------------------------------------------------
-
-        private void UpdateCabinets(Document curDoc)
-        {
-            // Load all new cabinet families from the library
-            foreach (CabinetMapping mapping in CabinetMapping.AllMappings)
-            {
-                string libraryPath = mapping.LibrarySubfolder == "Kitchen"
-                    ? CaseworkKitchenPath
-                    : CaseworkBathPath;
-                Utils.LoadFamilyFromLibrary(curDoc, libraryPath, mapping.NewFamilyName);
-            }
-
-            // Collect all casework instances that match a mapping entry
-            List<FamilyInstance> cabinets = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_Casework)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi => CabinetMapping.AllMappings.Any(m => m.OldFamilyName == fi.Symbol.FamilyName))
-                .ToList();
-
-            foreach (FamilyInstance cabinet in cabinets)
-            {
-                CabinetMapping mapping = CabinetMapping.AllMappings
-                    .FirstOrDefault(m => m.OldFamilyName == cabinet.Symbol.FamilyName);
-                if (mapping == null) continue;
-
-                // Match on the same type name in the new family
-                FamilySymbol newType = Utils.FindFamilySymbol(curDoc, mapping.NewFamilyName, cabinet.Symbol.Name);
-                if (newType == null) continue;
-                if (!newType.IsActive) newType.Activate();
-
-                cabinet.ChangeTypeId(newType.Id);
-
-                // Item 16: set cabinet finish height to 2'-10½"
-                SetParamValueInFeet(cabinet, "Cabinet Height", 34.5 / 12.0);
-            }
-
-            // Replace vanity countertops: --Vanity Counter-- / Type 1 → LD_GM_Counter_Vanity_Top-Mount / Round Lav
-            string counterFamilyName = "LD_GM_Counter_Vanity_Top-Mount";
-            Utils.LoadFamilyFromLibrary(curDoc, GenericModelBathPath, counterFamilyName);
-
-            FamilySymbol newCounterType = Utils.FindFamilySymbol(curDoc, counterFamilyName, "Round Lav");
-            if (newCounterType != null)
-            {
-                if (!newCounterType.IsActive) newCounterType.Activate();
-
-                List<FamilyInstance> countertops = new FilteredElementCollector(curDoc)
-                    .OfClass(typeof(FamilyInstance))
-                    .Cast<FamilyInstance>()
-                    .Where(fi => fi.Symbol.FamilyName == "--Vanity Counter--" && fi.Symbol.Name == "Type 1")
-                    .ToList();
-
-                foreach (FamilyInstance counter in countertops)
-                {
-                    counter.ChangeTypeId(newCounterType.Id);
-
-                    // Item 16: set counter finish height to 3'-0"
-                    SetParamValueInFeet(counter, "Counter Height", 3.0);
-                }
-            }
-        }
-
-        // Ceiling Items ------------------------------------------------------------------
-
-        private void UpdateCeilingItems(Document curDoc)
-        {
-            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Ceiling_Items");
-
-            FamilySymbol baseType = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(FamilySymbol))
-                .Cast<FamilySymbol>()
-                .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" &&
-                                      fs.Name.StartsWith("Disp Stair", StringComparison.OrdinalIgnoreCase));
-
-            if (baseType == null) return;
-
-            List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "--Ceiling Items--")
-                .ToList();
-
-            // Cache of already-created sized types to avoid duplicating multiple times
-            Dictionary<string, FamilySymbol> sizedTypes = new Dictionary<string, FamilySymbol>();
-
-            foreach (FamilyInstance inst in oldInstances)
-            {
-                double oldWidth  = inst.Symbol.LookupParameter("Width")?.AsDouble()  ?? 0;
-                double oldLength = inst.Symbol.LookupParameter("Length")?.AsDouble() ?? 0;
-
-                double baseWidth  = baseType.LookupParameter("Width")?.AsDouble()  ?? 0;
-                double baseLength = baseType.LookupParameter("Length")?.AsDouble() ?? 0;
-
-                bool dimensionsMatch = Math.Abs(oldWidth - baseWidth)   < 0.01 &&
-                                       Math.Abs(oldLength - baseLength) < 0.01;
-
-                FamilySymbol targetType;
-
-                if (dimensionsMatch)
-                {
-                    targetType = baseType;
-                }
-                else
-                {
-                    // Build a type name from the actual dimensions in inches
-                    int wInches = (int)Math.Round(oldWidth  * 12);
-                    int lInches = (int)Math.Round(oldLength * 12);
-                    string typeName = $"Disp Stair {wInches}\"x{lInches}\"";
-
-                    if (!sizedTypes.TryGetValue(typeName, out targetType))
-                    {
-                        // Check if this type was already created in a previous run
-                        targetType = new FilteredElementCollector(curDoc)
-                            .OfClass(typeof(FamilySymbol))
-                            .Cast<FamilySymbol>()
-                            .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" && fs.Name == typeName);
-
-                        if (targetType == null)
-                        {
-                            // Duplicate the base type and set the correct dimensions
-                            targetType = baseType.Duplicate(typeName) as FamilySymbol;
-                            if (targetType == null) continue;
-
-                            Parameter wp = targetType.LookupParameter("Width");
-                            Parameter lp = targetType.LookupParameter("Length");
-                            if (wp != null && !wp.IsReadOnly) wp.Set(oldWidth);
-                            if (lp != null && !lp.IsReadOnly) lp.Set(oldLength);
-                        }
-
-                        sizedTypes[typeName] = targetType;
-                    }
-                }
-
-                if (!targetType.IsActive) targetType.Activate();
-
-                Parameter arrowParam = targetType.LookupParameter("Arrow");
-                if (arrowParam != null && !arrowParam.IsReadOnly)
-                    arrowParam.Set(1);
-
-                inst.ChangeTypeId(targetType.Id);
-            }
-        }
-
-        // Item 7 -------------------------------------------------------------------------
-
-        private void UpdateFloorMaterials(Document curDoc)
-        {
-            // Identify the first floor as the level with the lowest elevation
             Level firstFloor = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
                 .OrderBy(l => l.Elevation)
                 .FirstOrDefault();
 
-            if (firstFloor == null) return;
+            if (firstFloor == null) return updatedRooms;
 
-            // Update Floor Finish on all first-floor rooms that are not already Concrete or HS
-            List<SpatialElement> firstFloorRooms = new FilteredElementCollector(curDoc)
+            // Set all 1st-floor rooms that are carpet to Hard Surface (HS)
+            foreach (SpatialElement room in new FilteredElementCollector(curDoc)
                 .OfClass(typeof(SpatialElement))
                 .Cast<SpatialElement>()
-                .Where(r => r.Location != null && r.LevelId == firstFloor.Id)
-                .ToList();
-
-            foreach (SpatialElement room in firstFloorRooms)
+                .Where(r => r.Location != null && r.LevelId == firstFloor.Id))
             {
                 Parameter floorFinish = room.LookupParameter("Floor Finish");
                 if (floorFinish == null || floorFinish.IsReadOnly) continue;
 
                 string current = floorFinish.AsString() ?? string.Empty;
                 if (current.Equals("Concrete", StringComparison.OrdinalIgnoreCase) ||
+                    current.Equals("Conc", StringComparison.OrdinalIgnoreCase) ||
                     current.Equals("HS", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 floorFinish.Set("HS");
+                updatedRooms.Add(room.LookupParameter("Name")?.AsString() ?? $"Room {room.Id}");
             }
 
-            // Delete Floor Material break symbols where Floor 1 or Floor 2 = "C"
+            // Delete floor break symbols where Floor 1 or Floor 2 = "C"
             List<ElementId> toDelete = new FilteredElementCollector(curDoc)
                 .OfCategory(BuiltInCategory.OST_FurnitureSystems)
                 .OfClass(typeof(FamilyInstance))
@@ -629,341 +142,74 @@ namespace Q2_Revisions
                 .Where(fi => fi.Symbol.FamilyName == "Floor Material" && fi.Symbol.Name == "Type 1")
                 .Where(fi =>
                 {
-                    string floor1 = fi.LookupParameter("Floor 1")?.AsString() ?? string.Empty;
-                    string floor2 = fi.LookupParameter("Floor 2")?.AsString() ?? string.Empty;
-                    return floor1.Equals("C", StringComparison.OrdinalIgnoreCase) ||
-                           floor2.Equals("C", StringComparison.OrdinalIgnoreCase);
+                    string f1 = fi.LookupParameter("Floor 1")?.AsString() ?? string.Empty;
+                    string f2 = fi.LookupParameter("Floor 2")?.AsString() ?? string.Empty;
+                    return f1.Equals("C", StringComparison.OrdinalIgnoreCase) ||
+                           f2.Equals("C", StringComparison.OrdinalIgnoreCase);
                 })
                 .Select(fi => fi.Id)
                 .ToList();
 
             foreach (ElementId id in toDelete)
                 curDoc.Delete(id);
+
+            return updatedRooms;
         }
 
-        // Item 6 -------------------------------------------------------------------------
 
-        private void UpdateLivingRoomLights(Document curDoc)
+        private View GetFirstFloorAnnotationView(Document curDoc)
         {
-            Utils.LoadFamilyFromLibrary(curDoc, LightingFixturesPath, "LD_LF_None");
+            Level firstFloor = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
 
-            FamilySymbol ceilingFanType = Utils.FindFamilySymbol(curDoc, "LD_LF_None", "Ceiling Fan");
-            FamilySymbol ledType        = Utils.FindFamilySymbol(curDoc, "LD_LF_None", "LED");
+            if (firstFloor == null) return null;
 
-            if (ceilingFanType == null || ledType == null) return;
-            if (!ceilingFanType.IsActive) ceilingFanType.Activate();
-            if (!ledType.IsActive) ledType.Activate();
-
-            // 6 puck light offsets: 3' on each axis from the fan center
-            XYZ[] offsets = new[]
-            {
-                new XYZ(-3,  3, 0), // up & left
-                new XYZ( 0,  3, 0), // up
-                new XYZ( 3,  3, 0), // up & right
-                new XYZ( 3, -3, 0), // down & right
-                new XYZ( 0, -3, 0), // down
-                new XYZ(-3, -3, 0), // down & left
-            };
-
-            // Find all LT-No Base / Ceiling Fan instances in Living or Family rooms
-            List<FamilyInstance> fans = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_LightingFixtures)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "LT-No Base" && fi.Symbol.Name == "Ceiling Fan")
-                .Where(fi => IsLivingRoom(FindRoomContainingPoint(curDoc, (fi.Location as LocationPoint)?.Point)))
-                .ToList();
-
-            foreach (FamilyInstance fan in fans)
-            {
-                XYZ fanPt = (fan.Location as LocationPoint)?.Point;
-                if (fanPt == null) continue;
-
-                Level level = curDoc.GetElement(fan.LevelId) as Level;
-
-                // Replace existing ceiling fan with new family type
-                fan.ChangeTypeId(ceilingFanType.Id);
-
-                // Place 6 LED puck lights around the fan
-                foreach (XYZ offset in offsets)
-                    curDoc.Create.NewFamilyInstance(fanPt + offset, ledType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-            }
-        }
-
-        private bool IsLivingRoom(SpatialElement room)
-        {
-            if (room == null) return false;
-            return room.Name.IndexOf("Family",  StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   room.Name.IndexOf("Living",  StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        // Item 5 -------------------------------------------------------------------------
-
-        private void RemoveSROs(Document curDoc)
-        {
-            List<FamilyInstance> sroList = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_Doors)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(d =>
-                {
-                    string comments = d.Symbol.LookupParameter("Type Comments")?.AsString() ?? string.Empty;
-                    return comments.IndexOf("SR", StringComparison.OrdinalIgnoreCase) >= 0;
-                })
-                .ToList();
-
-            foreach (FamilyInstance sro in sroList)
-            {
-                Wall hostWall = sro.Host as Wall;
-                if (hostWall == null) continue;
-
-                XYZ centerPt = (sro.Location as LocationPoint)?.Point;
-                if (centerPt == null) continue;
-
-                double width = sro.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
-                if (width <= 0) continue;
-
-                LocationCurve wallLocCurve = hostWall.Location as LocationCurve;
-                Line wallLine = wallLocCurve?.Curve as Line;
-                if (wallLine == null) continue;
-
-                XYZ wallDir = wallLine.Direction;
-                XYZ leftEdge  = centerPt - wallDir * (width / 2.0);
-                XYZ rightEdge = centerPt + wallDir * (width / 2.0);
-
-                // Ensure left/right are ordered along the wall's positive direction
-                double leftParam  = wallLine.Project(leftEdge).Parameter;
-                double rightParam = wallLine.Project(rightEdge).Parameter;
-                if (leftParam > rightParam)
-                {
-                    double tmp = leftParam; leftParam = rightParam; rightParam = tmp;
-                }
-
-                // Delete the SRO — wall fills back in
-                curDoc.Delete(sro.Id);
-
-                // Split at left edge: hostWall → left segment; splitIds1[0] → leftEdge..end
-                IList<ElementId> splitIds1 = wallLocCurve.Split(new List<double> { leftParam });
-                if (splitIds1 == null || splitIds1.Count == 0) continue;
-                ElementId newWallId1 = splitIds1[0];
-
-                Wall newWall1 = curDoc.GetElement(newWallId1) as Wall;
-                if (newWall1 == null) continue;
-
-                // Split at right edge: newWall1 → middle segment; splitIds2[0] → rightEdge..end
-                LocationCurve newWall1Loc = newWall1.Location as LocationCurve;
-                Line newWall1Line = newWall1Loc?.Curve as Line;
-                if (newWall1Line == null) continue;
-
-                double rightParamLocal = newWall1Line.Project(rightEdge).Parameter;
-                IList<ElementId> splitIds2 = newWall1Loc.Split(new List<double> { rightParamLocal });
-                if (splitIds2 == null || splitIds2.Count == 0) continue;
-
-                // newWall1 is now the middle wall segment (where the SRO was) — delete it
-                curDoc.Delete(newWallId1);
-            }
-        }
-
-        // Rear Door ----------------------------------------------------------------------
-
-        private void UpdateRearDoor(Document curDoc, string specLevel)
-        {
-            string newFamilyName;
-            string newTypeName;
-            double targetWidthFt;
-
-            if (specLevel == "Complete Home")
-            {
-                newFamilyName   = "LD_DR_Ext_Single_Half Lite_2 Panel";
-                newTypeName     = "32\"x80\"";
-                targetWidthFt   = 32.0 / 12.0;
-            }
-            // TODO: add Complete Home Plus and Terrata cases
-            else
-            {
-                return;
-            }
-
-            Utils.LoadFamilyFromLibrary(curDoc, DoorFamilyPath, newFamilyName);
-
-            FamilySymbol newType = Utils.FindFamilySymbol(curDoc, newFamilyName, newTypeName);
-            if (newType == null) return;
-            if (!newType.IsActive) newType.Activate();
-
-            List<FamilyInstance> rearDoors = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_Doors)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(d =>
-                {
-                    string desc = d.Symbol.LookupParameter("Description")?.AsString() ?? string.Empty;
-                    if (desc.IndexOf("Exterior Entry", StringComparison.OrdinalIgnoreCase) < 0)
-                        return false;
-
-                    double width = d.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
-                    return Math.Abs(width - targetWidthFt) < 0.01;
-                })
-                .ToList();
-
-            foreach (FamilyInstance door in rearDoors)
-                door.ChangeTypeId(newType.Id);
-        }
-
-        // Item 4 -------------------------------------------------------------------------
-
-        private void UpdateFrontDoors(Document curDoc)
-        {
-            string newFamilyName = "LD_DR_Ext_Single 3_4 Lite_1 Panel";
-            Utils.LoadFamilyFromLibrary(curDoc, DoorFamilyPath, newFamilyName);
-
-            FamilySymbol type80 = Utils.FindFamilySymbol(curDoc, newFamilyName, "36\"x80\" DL");
-            FamilySymbol type96 = Utils.FindFamilySymbol(curDoc, newFamilyName, "36\"x96\" DL");
-
-            if (type80 != null && !type80.IsActive) type80.Activate();
-            if (type96 != null && !type96.IsActive) type96.Activate();
-
-            // Find all 36"-wide doors whose type Description contains "Exterior Entry"
-            List<FamilyInstance> frontDoors = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_Doors)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .Where(d =>
-                {
-                    string desc = d.Symbol.LookupParameter("Description")?.AsString() ?? string.Empty;
-                    if (desc.IndexOf("Exterior Entry", StringComparison.OrdinalIgnoreCase) < 0)
-                        return false;
-
-                    double width = d.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
-                    return Math.Abs(width - 3.0) < 0.01; // 36" = 3 ft
-                })
-                .ToList();
-
-            foreach (FamilyInstance door in frontDoors)
-            {
-                double height = door.Symbol.LookupParameter("Height")?.AsDouble() ?? 0;
-
-                // 80" = 6.6667 ft, 96" = 8 ft
-                if (Math.Abs(height - (80.0 / 12.0)) < 0.01 && type80 != null)
-                    door.ChangeTypeId(type80.Id);
-                else if (Math.Abs(height - (96.0 / 12.0)) < 0.01 && type96 != null)
-                    door.ChangeTypeId(type96.Id);
-            }
-        }
-
-        // Item 2 -------------------------------------------------------------------------
-
-        private bool IsBathRoom(string name)
-        {
-            return name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Powder", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Pwdr", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private ViewPlan GetFloorPlanForLevel(Document curDoc, Level level)
-        {
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
-                .FirstOrDefault(v => v.ViewType == ViewType.FloorPlan &&
-                                     !v.IsTemplate &&
-                                     v.GenLevel != null &&
-                                     v.GenLevel.Id == level.Id);
+                .FirstOrDefault(v => v.GenLevel?.Id == firstFloor.Id &&
+                                     v.Name.IndexOf("Annotation", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
-        private void DuplicateSwitchAndCleanWiring(Document curDoc, FamilyInstance existingSwitch, FamilySymbol newSwitchType)
+        // helper method for Revision 1 - update shelving
+        private int UpdateShelving(Document curDoc)
         {
-            Wall hostWall = existingSwitch.Host as Wall;
-            if (hostWall == null)
-                return;
+            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
 
-            XYZ swPt = (existingSwitch.Location as LocationPoint)?.Point;
-            if (swPt == null)
-                return;
+            FamilySymbol newType = Utils.FindFamilySymbol(curDoc, "LD_GM_Shelving", "4 Shelves");
+            if (newType == null) return 0;
+            if (!newType.IsActive) newType.Activate();
 
-            Line wallLine = (hostWall.Location as LocationCurve)?.Curve as Line;
-            if (wallLine == null)
-                return;
-
-            XYZ newPt = swPt + wallLine.Direction * (4.0 / 12.0);
-
-            if (!newSwitchType.IsActive)
-                newSwitchType.Activate();
-
-            curDoc.Create.NewFamilyInstance(newPt, newSwitchType, hostWall, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-
-            SpatialElement switchRoom = FindRoomContainingPoint(curDoc, swPt);
-            if (switchRoom != null)
-                DeleteWiringLinesInRoom(curDoc, switchRoom);
-        }
-
-        private SpatialElement FindRoomContainingPoint(Document curDoc, XYZ point)
-        {
-            if (point == null) return null;
-            return new FilteredElementCollector(curDoc)
-                .OfClass(typeof(SpatialElement))
-                .Cast<SpatialElement>()
-                .FirstOrDefault(r =>
-                {
-                    if (r.Location == null) return false;
-                    var room = r as Autodesk.Revit.DB.Architecture.Room;
-                    if (room == null) return false;
-                    double elev = (curDoc.GetElement(r.LevelId) as Level)?.Elevation ?? 0;
-                    return room.IsPointInRoom(new XYZ(point.X, point.Y, elev + 1.0));
-                });
-        }
-
-        private void DeleteWiringLinesInRoom(Document curDoc, SpatialElement room)
-        {
-            GraphicsStyle wiringStyle = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(GraphicsStyle))
-                .Cast<GraphicsStyle>()
-                .FirstOrDefault(gs => gs.Name == "Wiring");
-
-            if (wiringStyle == null)
-                return;
-
-            var revitRoom = room as Autodesk.Revit.DB.Architecture.Room;
-            if (revitRoom == null) return;
-            double roomElev = (curDoc.GetElement(room.LevelId) as Level)?.Elevation ?? 0;
-
-            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(CurveElement))
-                .OfType<DetailLine>()
-                .Where(dl => dl.LineStyle.Id == wiringStyle.Id)
-                .Where(dl =>
-                {
-                    XYZ mid = dl.GeometryCurve.Evaluate(0.5, true);
-                    return revitRoom.IsPointInRoom(new XYZ(mid.X, mid.Y, roomElev + 1.0));
-                })
-                .Select(dl => dl.Id)
+            List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.FamilyName == "Shelving" && fi.Symbol.Name == "5 Shelves")
                 .ToList();
 
-            foreach (ElementId id in toDelete)
-                curDoc.Delete(id);
-        }
+            foreach (FamilyInstance inst in oldInstances)
+            {
+                double depth1 = Utils.GetParamValueInFeet(inst, "Depth1");
+                double depth2 = Utils.GetParamValueInFeet(inst, "Depth2");
+                double depth3 = Utils.GetParamValueInFeet(inst, "Depth3");
+                double depth4 = Utils.GetParamValueInFeet(inst, "Depth4");
+                double depth5 = Utils.GetParamValueInFeet(inst, "Depth5");
 
-        // Helpers ------------------------------------------------------------------------
+                bool shallowUppers = depth4 < depth3 || depth5 < depth3;
 
-        private double GetParamValueInFeet(Element elem, string paramName)
-        {
-            Parameter p = elem.LookupParameter(paramName);
-            if (p != null && p.StorageType == StorageType.Double)
-                return p.AsDouble();
-            return 0.0;
-        }
+                inst.ChangeTypeId(newType.Id);
 
-        private void SetParamValueInFeet(Element elem, string paramName, double valueInFeet)
-        {
-            Parameter p = elem.LookupParameter(paramName);
-            if (p != null && !p.IsReadOnly && p.StorageType == StorageType.Double)
-                p.Set(valueInFeet);
-        }
+                Utils.SetParamValueInFeet(inst, "Depth1", depth1);
+                Utils.SetParamValueInFeet(inst, "Depth2", depth2);
+                Utils.SetParamValueInFeet(inst, "Depth3", depth3);
+                Utils.SetParamValueInFeet(inst, "Depth4", depth4);
 
-        private void SetParamInt(Element elem, string paramName, int value)
-        {
-            Parameter p = elem.LookupParameter(paramName);
-            if (p != null && !p.IsReadOnly && p.StorageType == StorageType.Integer)
-                p.Set(value);
+                if (shallowUppers)
+                    Utils.SetParamInt(inst, "Shallow Uppers", 1);
+            }
+
+            return oldInstances.Count;
         }
     }
 }

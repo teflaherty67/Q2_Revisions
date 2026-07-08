@@ -2816,5 +2816,25 @@ namespace Q2_Revisions.Common
                 return image;
             }
         }
+
+        internal static double GetParamValueInFeet(Element elem, string paramName)
+        {
+            Parameter p = elem.LookupParameter(paramName);
+            return (p != null && p.StorageType == StorageType.Double) ? p.AsDouble() : 0.0;
+        }
+
+        internal static void SetParamValueInFeet(Element elem, string paramName, double valueInFeet)
+        {
+            Parameter p = elem.LookupParameter(paramName);
+            if (p != null && !p.IsReadOnly && p.StorageType == StorageType.Double)
+                p.Set(valueInFeet);
+        }
+
+        internal static void SetParamInt(Element elem, string paramName, int value)
+        {
+            Parameter p = elem.LookupParameter(paramName);
+            if (p != null && !p.IsReadOnly && p.StorageType == StorageType.Integer)
+                p.Set(value);
+        }
     }
 }
