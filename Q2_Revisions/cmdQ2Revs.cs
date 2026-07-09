@@ -166,17 +166,14 @@ namespace Q2_Revisions
             Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete",
                 $"Q2 Revisions completed. Refer to {planName}.txt file for revisions to complete manually.");
 
-            return Result.Succeeded;
-
             // launch the .txt file automatically after the user closes the dialog
-            System.Diagnostics.Process.Start(txtFilePath);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(txtFilePath)
             {
                 UseShellExecute = true
             });
-        }
 
-
-        
+            return Result.Succeeded;
+        }        
 
         #region Floor Plan Revisions Methods
 
