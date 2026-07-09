@@ -170,6 +170,9 @@ namespace Q2_Revisions
 
             // launch the .txt file automatically after the user closes the dialog
             System.Diagnostics.Process.Start(txtFilePath);
+            {
+                UseShellExecute = true
+            });
         }
 
 
