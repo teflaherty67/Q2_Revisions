@@ -123,19 +123,57 @@ namespace Q2_Revisions
 
             #region Revision 4: Remove SROs
 
+            // create variable for SRO count
+            int countSRO = 0;
 
+            // create a transaction
+            using (Transaction t4 = new Transaction(curDoc, "Remove SROs"))
+            {
+                // start the transaction
+                t4.Start();
 
+                // call the method to remove SROs and heal walls
+                countSRO = RemoveSROs(curDoc);
+
+                // commit the transaction
+                t4.Commit();
+            }
+
+            // notify the user of SRO removal
+            Utils.TaskDialogInformation("Q2 Revisions", "Remove SROs",
+                countSRO == 0
+                    ? "No SROs were found in the project."
+                    : $"{countSRO} SRO{(countSRO == 1 ? " was" : "s were")} removed from the project.");
 
             #endregion
 
             #endregion
+
+            // build the list of manual checklist items for the .txt file
+            string txtFilePath = System.IO.Path.Combine(
+                System.IO.Path.GetDirectoryName(curDoc.PathName), $"{planName}.txt");
+
+            // write the manual checklist items to the .txt file
+            System.IO.File.WriteAllLines(txtFilePath, new[]
+            {
+                $"{planName} – Q2 Revisions: Items to Complete Manually",
+                string.Empty,
+                "1. Review client redlines for SRO stem wall removal. Stem walls that contain electrical elements shall remain regardless of client redlines.",
+            });
+
 
             // notify the user of results
             Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete",
                 $"Q2 Revisions completed. Refer to {planName}.txt file for revisions to complete manually.");
 
             return Result.Succeeded;
-        }        
+
+            // launch the .txt file automatically after the user closes the dialog
+            System.Diagnostics.Process.Start(txtFilePath);
+        }
+
+
+        
 
         #region Floor Plan Revisions Methods
 
@@ -393,6 +431,71 @@ namespace Q2_Revisions
 
             // return the number of instances updated
             return oldInstances.Count;
+        }
+
+        /// <summary>
+        /// method to remove all SROs from the current document
+        /// </summary>
+        private int RemoveSROs(Document curDoc)
+        {
+            // collect all door instances with "SR" in their Type Comments
+            List<FamilyInstance> sroList = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Doors)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(d =>
+                {
+                    string comments = d.Symbol.LookupParameter("Type Comments")?.AsString() ?? string.Empty;
+                    return comments.IndexOf("SR", StringComparison.OrdinalIgnoreCase) >= 0;
+                })
+                .ToList();
+
+            // loop through each SRO and remove it, healing the host wall
+            foreach (FamilyInstance sro in sroList)
+            {
+                // get the host wall
+                Wall hostWall = sro.Host as Wall;
+                if (hostWall == null) continue;
+
+                // get the center point of the SRO opening
+                XYZ centerPt = (sro.Location as LocationPoint)?.Point;
+                if (centerPt == null) continue;
+
+                // get the width of the SRO
+                double width = sro.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
+                if (width <= 0) continue;
+
+                // get the wall location curve and direction
+                LocationCurve wallLocCurve = hostWall.Location as LocationCurve;
+                Line wallLine = wallLocCurve?.Curve as Line;
+                if (wallLine == null) continue;
+
+                // capture the original wall start and end points
+                XYZ wallStart = wallLine.GetEndPoint(0);
+                XYZ wallEnd = wallLine.GetEndPoint(1);
+                XYZ wallDir = wallLine.Direction;
+
+                // calculate the left and right edges of the SRO opening
+                XYZ leftEdge = centerPt - wallDir * (width / 2.0);
+                XYZ rightEdge = centerPt + wallDir * (width / 2.0);
+
+                // delete the SRO so the wall heals
+                curDoc.Delete(sro.Id);
+
+                // shorten the host wall to stop at the left edge of the opening
+                wallLocCurve.Curve = Line.CreateBound(wallStart, leftEdge);
+
+                // create a new wall from the right edge of the opening to the original wall end
+                Wall.Create(curDoc,
+                    Line.CreateBound(rightEdge, wallEnd),
+                    hostWall.WallType.Id,
+                    hostWall.LevelId,
+                    hostWall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).AsDouble(),
+                    0, hostWall.Flipped, false);
+            }
+
+            // return the number of SROs removed
+            return sroList.Count;
         }
 
 
