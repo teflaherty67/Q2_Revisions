@@ -94,6 +94,25 @@ namespace Q2_Revisions
 
             #endregion
 
+            #region Revision 3: Update Ceiling Items Family
+
+            // create a transaction
+            using (Transaction t3 = new Transaction(curDoc, "Update Clg Items"))
+            {
+                // start the transaction
+                t3.Start();
+
+                // call the method to update the Disp Stairs family
+                UpdateClgItems(curDoc);
+
+                // commit the transaction
+                t3.Commit();
+            }
+
+
+
+            #endregion
+
             #endregion
 
             // notify the user of results
@@ -101,8 +120,75 @@ namespace Q2_Revisions
                 $"Q2 Revisions completed. Refer to {planName}.txt file for revisions to complete manually.");
 
             return Result.Succeeded;
+        }        
+
+        #region Floor Plan Revisions Methods
+
+        /// <summary>
+        /// method to set active view to the First Floor Plan Annotation view, if it exists.
+        /// </summary>
+        private View GetFirstFloorAnnotationView(Document curDoc)
+        {
+            Level firstFloor = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
+
+            if (firstFloor == null) return null;
+
+            return new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewPlan))
+                .Cast<ViewPlan>()
+                .FirstOrDefault(v => v.GenLevel?.Id == firstFloor.Id &&
+                                     v.Name.IndexOf("Annotation", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
+        /// <summary>
+        /// method to update all instances of the "Shelving" 
+        /// family from "5 Shelves" to "4 Shelves" in the current document.
+        /// </summary>
+        private int UpdateShelving(Document curDoc)
+        {
+            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
+
+            FamilySymbol newType = Utils.FindFamilySymbol(curDoc, "LD_GM_Shelving", "4 Shelves");
+            if (newType == null) return 0;
+            if (!newType.IsActive) newType.Activate();
+
+            List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => fi.Symbol.FamilyName == "Shelving" && fi.Symbol.Name == "5 Shelves")
+                .ToList();
+
+            foreach (FamilyInstance inst in oldInstances)
+            {
+                double depth1 = Utils.GetParamValueInFeet(inst, "Depth1");
+                double depth2 = Utils.GetParamValueInFeet(inst, "Depth2");
+                double depth3 = Utils.GetParamValueInFeet(inst, "Depth3");
+                double depth4 = Utils.GetParamValueInFeet(inst, "Depth4");
+                double depth5 = Utils.GetParamValueInFeet(inst, "Depth5");
+
+                bool shallowUppers = depth4 < depth3 || depth5 < depth3;
+
+                inst.ChangeTypeId(newType.Id);
+
+                Utils.SetParamValueInFeet(inst, "Depth1", depth1);
+                Utils.SetParamValueInFeet(inst, "Depth2", depth2);
+                Utils.SetParamValueInFeet(inst, "Depth3", depth3);
+                Utils.SetParamValueInFeet(inst, "Depth4", depth4);
+
+                if (shallowUppers)
+                    Utils.SetParamInt(inst, "Shallow Uppers", 1);
+            }
+
+            return oldInstances.Count;
+        }
+
+        /// <summary>
+        /// method to update flooring in all rooms on the first floor to "HS" (Hard Surface)
+        /// if they are not already "Concrete", "Conc", or "HS".
+        /// </summary>
         private List<string> UpdateFloorMaterials(Document curDoc)
         {
             List<string> updatedRooms = new List<string>();
@@ -156,60 +242,92 @@ namespace Q2_Revisions
             return updatedRooms;
         }
 
-
-        private View GetFirstFloorAnnotationView(Document curDoc)
+        /// <summary>
+        /// method to update Ceiliing Items family in the current document
+        /// to the show current version of the "Disp Stairs" family type.
+        /// </summary>
+        private void UpdateClgItems(Document curDoc)
         {
-            Level firstFloor = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Level))
-                .Cast<Level>()
-                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
+            Utils.LoadFamilyFromLibrary(curDoc, CeilingItemsPath, "LD_GM_Ceiling_Items");
 
-            if (firstFloor == null) return null;
+            // Find the base "Disp Stair" type to use as a template for duplicating sized types
+            FamilySymbol baseType = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" &&
+                                      fs.Name.StartsWith("Disp Stair", StringComparison.OrdinalIgnoreCase));
 
-            return new FilteredElementCollector(curDoc)
-                .OfClass(typeof(ViewPlan))
-                .Cast<ViewPlan>()
-                .FirstOrDefault(v => v.GenLevel?.Id == firstFloor.Id &&
-                                     v.Name.IndexOf("Annotation", StringComparison.OrdinalIgnoreCase) >= 0);
-        }
+            if (baseType == null) return;
 
-        // helper method for Revision 1 - update shelving
-        private int UpdateShelving(Document curDoc)
-        {
-            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
-
-            FamilySymbol newType = Utils.FindFamilySymbol(curDoc, "LD_GM_Shelving", "4 Shelves");
-            if (newType == null) return 0;
-            if (!newType.IsActive) newType.Activate();
-
+            // Only swap instances that are "Disp Stair" types in --Ceiling Items--
             List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "Shelving" && fi.Symbol.Name == "5 Shelves")
+                .Where(fi => fi.Symbol.FamilyName == "--Ceiling Items--" &&
+                             fi.Symbol.Name.StartsWith("Disp Stair", StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
+            Dictionary<string, FamilySymbol> sizedTypes = new Dictionary<string, FamilySymbol>();
 
             foreach (FamilyInstance inst in oldInstances)
             {
-                double depth1 = Utils.GetParamValueInFeet(inst, "Depth1");
-                double depth2 = Utils.GetParamValueInFeet(inst, "Depth2");
-                double depth3 = Utils.GetParamValueInFeet(inst, "Depth3");
-                double depth4 = Utils.GetParamValueInFeet(inst, "Depth4");
-                double depth5 = Utils.GetParamValueInFeet(inst, "Depth5");
+                double oldWidth = inst.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
+                double oldLength = inst.Symbol.LookupParameter("Length")?.AsDouble() ?? 0;
+                string typeComments = inst.Symbol.LookupParameter("Type Comments")?.AsString() ?? string.Empty;
 
-                bool shallowUppers = depth4 < depth3 || depth5 < depth3;
+                double baseWidth = baseType.LookupParameter("Width")?.AsDouble() ?? 0;
+                double baseLength = baseType.LookupParameter("Length")?.AsDouble() ?? 0;
 
-                inst.ChangeTypeId(newType.Id);
+                bool dimensionsMatch = Math.Abs(oldWidth - baseWidth) < 0.01 &&
+                                       Math.Abs(oldLength - baseLength) < 0.01;
 
-                Utils.SetParamValueInFeet(inst, "Depth1", depth1);
-                Utils.SetParamValueInFeet(inst, "Depth2", depth2);
-                Utils.SetParamValueInFeet(inst, "Depth3", depth3);
-                Utils.SetParamValueInFeet(inst, "Depth4", depth4);
+                FamilySymbol targetType;
 
-                if (shallowUppers)
-                    Utils.SetParamInt(inst, "Shallow Uppers", 1);
+                if (dimensionsMatch)
+                {
+                    targetType = baseType;
+                }
+                else
+                {
+                    int wIn = (int)Math.Round(oldWidth * 12);
+                    int lIn = (int)Math.Round(oldLength * 12);
+                    string typeName = $"Disp Stair {wIn}\"x{lIn}\"";
+
+                    if (!sizedTypes.TryGetValue(typeName, out targetType))
+                    {
+                        targetType = new FilteredElementCollector(curDoc)
+                            .OfClass(typeof(FamilySymbol))
+                            .Cast<FamilySymbol>()
+                            .FirstOrDefault(fs => fs.FamilyName == "LD_GM_Ceiling_Items" && fs.Name == typeName);
+
+                        if (targetType == null)
+                        {
+                            targetType = baseType.Duplicate(typeName) as FamilySymbol;
+                            if (targetType == null) continue;
+
+                            Parameter wp = targetType.LookupParameter("Width");
+                            Parameter lp = targetType.LookupParameter("Length");
+                            Parameter cp = targetType.LookupParameter("Type Comments");
+                            if (wp != null && !wp.IsReadOnly) wp.Set(oldWidth);
+                            if (lp != null && !lp.IsReadOnly) lp.Set(oldLength);
+                            if (cp != null && !cp.IsReadOnly && !string.IsNullOrEmpty(typeComments))
+                                cp.Set(typeComments);
+                        }
+
+                        sizedTypes[typeName] = targetType;
+                    }
+                }
+
+                if (!targetType.IsActive) targetType.Activate();
+
+                // Set Arrow = Yes on the type
+                Parameter arrow = targetType.LookupParameter("Arrow");
+                if (arrow != null && !arrow.IsReadOnly) arrow.Set(1);
+
+                inst.ChangeTypeId(targetType.Id);
             }
-
-            return oldInstances.Count;
         }
+
+        #endregion
     }
 }
