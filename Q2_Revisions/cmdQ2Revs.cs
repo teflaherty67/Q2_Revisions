@@ -8,6 +8,7 @@ namespace Q2_Revisions
         // set variables for file paths
         private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
+        private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -149,6 +150,66 @@ namespace Q2_Revisions
 
             #endregion
 
+            #region Exterior Entry Revisions
+
+            #region Front Door Revisions
+
+            // check value of specLevel and only update front door if not Terrata
+            if (specLevel != "Terrata")
+            {
+                // create a transaction
+                using (Transaction t5 = new Transaction(curDoc, "Update Front Door"))
+                {
+                    // start the transaction
+                    t5.Start();
+
+                    // call the method to update the front door
+                    UpdateFrontDoor(curDoc, specLevel);
+
+                    // commit the transaction
+                    t5.Commit();
+                }               
+            }
+
+            #endregion
+
+            #region Rear Door Revisions
+
+            // check value of specLevel and only update rear door if not Terrata
+            if (specLevel != "Terrata")
+            {
+                // create a transaction
+                using (Transaction t6 = new Transaction(curDoc, "Update Rear Door"))
+                {
+                    // start the transaction
+                    t6.Start();
+
+                    // call the method to update the rear door
+                    UpdateRearDoor(curDoc, specLevel);
+
+                    // commit the transaction
+                    t6.Commit();
+                }
+            }
+
+            #endregion
+
+            // notify the user of front and rear door updates
+            if (specLevel != "Terrata")
+            {
+                // build and show the notification message
+                Utils.TaskDialogInformation("Q2 Revisions", "Update Entry Doors",
+                    "The front and rear door families were updated, and types set per the selected spec level.");
+            }
+
+            #endregion
+
+            #region Electrical Revisions
+
+
+
+            #endregion
+
             // build the list of manual checklist items for the .txt file
             string txtFilePath = System.IO.Path.Combine(
                 System.IO.Path.GetDirectoryName(curDoc.PathName), $"{planName}.txt");
@@ -173,7 +234,8 @@ namespace Q2_Revisions
             });
 
             return Result.Succeeded;
-        }        
+        }
+      
 
         #region Floor Plan Revisions Methods
 
@@ -498,6 +560,116 @@ namespace Q2_Revisions
             return sroList.Count;
         }
 
+        #endregion
+
+        #region Exterior Entry Revisions Methods
+
+        /// <summary>
+        /// method to update the front door to the new LD_DR_Ext_Single 3_4 Lite_1 Panel family.
+        /// finds doors that are 36" wide with "Exterior Entry" in the Description parameter
+        /// and swaps to the correct type based on spec level.
+        /// </summary>
+        private void UpdateFrontDoor(Document curDoc, string specLevel)
+        {
+            // load the new front door family from the library
+            Utils.LoadFamilyFromLibrary(curDoc, DoorFamilyPath, "LD_DR_Ext_Single 3_4 Lite_1 Panel");
+
+            // determine the correct type name based on spec level
+            string typeName = specLevel == "Complete Home Plus" ? "36\"x96\" DL" : "36\"x80\" DL";
+
+            // find the new door type in the loaded family
+            FamilySymbol newType = Utils.FindFamilySymbol(curDoc, "LD_DR_Ext_Single 3_4 Lite_1 Panel", typeName);
+
+            // return if the new type is not found
+            if (newType == null) return;
+
+            // activate the new type if it is not already active
+            if (!newType.IsActive) newType.Activate();
+
+            // collect all door instances that are 36" wide with "Exterior Entry" in Description
+            List<FamilyInstance> frontDoors = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Doors)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(d =>
+                {
+                    // check width is 36" (3.0 feet)
+                    double width = d.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
+                    if (Math.Abs(width - 3.0) > 0.01) return false;
+
+                    // check Description contains "Exterior Entry"
+                    string desc = d.Symbol.LookupParameter("Description")?.AsString() ?? string.Empty;
+                    return desc.IndexOf("Exterior Entry", StringComparison.OrdinalIgnoreCase) >= 0;
+                })
+                .ToList();
+
+            // loop through each front door and swap to the new type
+            foreach (FamilyInstance door in frontDoors)
+            {
+                // swap the door to the new type
+                door.ChangeTypeId(newType.Id);
+            }
+        }
+
+        /// <summary>
+        /// method to update the rear door to the correct new family based on spec level.
+        /// finds doors that are 32" wide with "Exterior Entry" in the Description parameter.
+        /// CH: LD_DR_Ext_Single_Half Lite_2 Panel / 32"x80"
+        /// CHP: LD_DR_Ext_Single_Full Lite / 32"x80" w/ Blinds
+        /// </summary>
+        private void UpdateRearDoor(Document curDoc, string specLevel)
+        {
+            // determine the correct family and type name based on spec level
+            string familyName;
+            string typeName;
+
+            if (specLevel == "Complete Home Plus")
+            {
+                familyName = "LD_DR_Ext_Single_Full Lite";
+                typeName = "32\"x80\" w/ Blinds";
+            }
+            else
+            {
+                familyName = "LD_DR_Ext_Single_Half Lite_2 Panel";
+                typeName = "32\"x80\"";
+            }
+
+            // load the new rear door family from the library
+            Utils.LoadFamilyFromLibrary(curDoc, DoorFamilyPath, familyName);
+
+            // find the new door type in the loaded family
+            FamilySymbol newType = Utils.FindFamilySymbol(curDoc, familyName, typeName);
+
+            // return if the new type is not found
+            if (newType == null) return;
+
+            // activate the new type if it is not already active
+            if (!newType.IsActive) newType.Activate();
+
+            // collect all door instances that are 32" wide with "Exterior Entry" in Description
+            List<FamilyInstance> rearDoors = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Doors)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(d =>
+                {
+                    // check width is 32" (2.667 feet)
+                    double width = d.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
+                    if (Math.Abs(width - (32.0 / 12.0)) > 0.01) return false;
+
+                    // check Description contains "Exterior Entry"
+                    string desc = d.Symbol.LookupParameter("Description")?.AsString() ?? string.Empty;
+                    return desc.IndexOf("Exterior Entry", StringComparison.OrdinalIgnoreCase) >= 0;
+                })
+                .ToList();
+
+            // loop through each rear door and swap to the new type
+            foreach (FamilyInstance door in rearDoors)
+            {
+                // swap the door to the new type
+                door.ChangeTypeId(newType.Id);
+            }
+        }
 
         #endregion
     }
