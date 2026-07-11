@@ -152,7 +152,7 @@ namespace Q2_Revisions
 
             #region Exterior Entry Revisions
 
-            #region Front Door Revisions
+            #region Revision 5:Front Door Revisions
 
             // check value of specLevel and only update front door if not Terrata
             if (specLevel != "Terrata")
@@ -173,7 +173,7 @@ namespace Q2_Revisions
 
             #endregion
 
-            #region Rear Door Revisions
+            #region Revision 6:Rear Door Revisions
 
             // check value of specLevel and only update rear door if not Terrata
             if (specLevel != "Terrata")
@@ -206,6 +206,57 @@ namespace Q2_Revisions
 
             #region Electrical Revisions
 
+            #region Revision 7: Remove all TV & Phone Jacks
+
+
+
+
+            #endregion
+
+            #region Revision 8: Remove WH Tstat
+
+
+
+
+            #endregion
+
+            #region Revision 9: Update Family/Living data drops to Dual Cat6
+
+
+
+
+
+            #endregion
+
+            #region Revision 10: Separate switches for bath lights & exhaust fans
+
+
+
+
+
+
+
+            #endregion
+
+            #region Revision 11: Add 6 LED fixtures at Fmaily/Living
+
+
+
+
+
+
+
+            #endregion
+
+            #region Revision 12: Move data distribution panel to Utility Room
+
+
+
+
+
+
+
+            #endregion
 
 
             #endregion
