@@ -244,37 +244,66 @@ namespace Q2_Revisions
 
             Utils.TaskDialogInformation("Q2 Revisions", "Remove PH & TV Outlets", outletMsg);
 
-
-
-
             #endregion
 
             #region Revision 8: Remove WH Tstat
 
+            // create variable for WH-Tstat count
+            int whTstatCount = 0;
 
+            // create a transaction
+            using (Transaction t8 = new Transaction(curDoc, "Remove WH-Tstat"))
+            {
+                // start the transaction
+                t8.Start();
 
+                // call the method to remove WH-Tstat instances
+                whTstatCount = RemoveWHTstat(curDoc);
+
+                // commit the transaction
+                t8.Commit();
+            }
+
+            // notify the user of WH-Tstat removal with proper grammar
+            Utils.TaskDialogInformation("Q2 Revisions", "Remove WH-Tstat",
+                whTstatCount == 0
+                    ? "No WH-Tstat instances were found in the project."
+                    : $"{whTstatCount} WH-Tstat {(whTstatCount == 1 ? "instance was" : "instances were")} removed from the project.");
 
             #endregion
 
             #region Revision 9: Update Family/Living data drops to Dual Cat6
 
+            // create a transaction
+            using (Transaction t9 = new Transaction(curDoc, "Rename Dual Data Type"))
+            {
+                // start the transaction
+                t9.Start();
+
+                // call the method to rename the Outlet-Dual Cat5e-Cat6 type
+                RenameDualDataType(curDoc);
+
+                // commit the transaction
+                t9.Commit();
+            }
+
+            // notify the user of the type rename
+            Utils.TaskDialogInformation("Q2 Revisions", "Rename Dual Data Type",
+                "The EL-Wall Base type 'Outlet-Dual Cat5e-Cat6' was renamed to 'Outlet-Dual Cat6' and Type Comments set to 'Dual Cat6'.");
+
+            #endregion
+
+            #region Revision 10: Add 6 LED fixtures at Family/Living 
+
+
+
 
 
 
 
             #endregion
 
-            #region Revision 10: Separate switches for bath lights & exhaust fans
-
-
-
-
-
-
-
-            #endregion
-
-            #region Revision 11: Add 6 LED fixtures at Fmaily/Living
+            #region Revision 11: Separate switches for bath lights & exhaust fans
 
 
 
@@ -325,7 +354,11 @@ namespace Q2_Revisions
 
        
 
-       
+
+
+
+
+
 
 
         #region Floor Plan Revisions Methods
@@ -790,7 +823,7 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// method to remove all telephone and television outlet instances from the current document.
+        /// method to remove all telephone and television outlet instances from the current project.
         /// finds electrical fixture instances in the El-Wall Base or El-No Base families
         /// whose type name is Outlet-Television, Outlet-Telephone, or Outlet-Telephone/Television.
         /// </summary>
@@ -828,6 +861,67 @@ namespace Q2_Revisions
 
             // return the number of outlets deleted
             return toDelete.Count;
+        }
+
+        /// <summary>
+        /// method to remove all WH-Tstat instances from the project.
+        /// finds electrical fixture instances in the El-Wall Base
+        /// family whose type name is WH-Tstat. 
+        /// </summary>
+        private int RemoveWHTstat(Document curDoc)
+        {
+            // collect all EL-Wall Base / WH-Tstat instances
+            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi =>
+                {
+                    // check if the family name is "EL-Wall Base"
+                    string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
+                    if (!famName.Contains("EL-Wall Base")) return false;
+
+                    // check if the type name is "WH-Tstat"
+                    return fi.Symbol.Name.Equals("WH-Tstat", StringComparison.OrdinalIgnoreCase);
+                })
+                .Select(fi => fi.Id)
+                .ToList();
+
+            // delete each instance
+            foreach (ElementId id in toDelete)
+                curDoc.Delete(id);
+
+            // return the number of instances deleted
+            return toDelete.Count;
+        }
+
+        /// <summary>
+        /// method to rename the EL-Wall Base FamilySymbol "Outlet-Dual Cat5e-Cat6" to "Outlet-Dual Cat6"
+        /// and set its Type Comments parameter to "Dual Cat6".
+        /// </summary>
+        private void RenameDualDataType(Document curDoc)
+        {
+            // find the FamilySymbol for EL-Wall Base / Outlet-Dual Cat5e-Cat6
+            FamilySymbol target = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .FirstOrDefault(fs =>
+                {
+                    // check that the family name contains "EL-Wall Base"
+                    string famName = fs.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
+                    return famName.Contains("EL-Wall Base") &&
+                           fs.Name.Equals("Outlet-Dual Cat5e-Cat6", StringComparison.OrdinalIgnoreCase);
+                });
+
+            // return if the type is not found
+            if (target == null) return;
+
+            // rename the type
+            target.Name = "Outlet-Dual Cat6";
+
+            // set the Type Comments parameter to "Dual Cat6"
+            Parameter typeComments = target.LookupParameter("Type Comments");
+            if (typeComments != null && !typeComments.IsReadOnly)
+                typeComments.Set("Dual Cat6");
         }
 
 
