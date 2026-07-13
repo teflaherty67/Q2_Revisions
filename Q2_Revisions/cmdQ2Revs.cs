@@ -1,3 +1,5 @@
+using Autodesk.Revit.DB.Architecture;
+using Autodesk.Revit.DB.Structure;
 using Q2_Revisions.Common;
 
 namespace Q2_Revisions
@@ -293,7 +295,80 @@ namespace Q2_Revisions
 
             #endregion
 
-            #region Revision 10: Add 6 LED fixtures at Family/Living 
+            #region Revision 10: Changed WP LED fixtures at wet areas to standard LED
+
+            // create variable for swapped fixture count
+            int wpLedCount = 0;
+
+            // create a transaction
+            using (Transaction t10 = new Transaction(curDoc, "Swap WP LED to LED in Bathrooms"))
+            {
+                // start the transaction
+                t10.Start();
+
+                // call the method to swap WP LED fixtures in bathrooms
+                wpLedCount = SwapWPLEDInBathrooms(curDoc);
+
+                // commit the transaction
+                t10.Commit();
+            }
+
+            // notify the user of WP LED swap results
+            Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures",
+                wpLedCount == 0
+                    ? "No WP LED fixtures were found in bathroom rooms."
+                    : $"{wpLedCount} WP LED {(wpLedCount == 1 ? "fixture was" : "fixtures were")} swapped to standard LED and {(wpLedCount == 1 ? "its tag was" : "their tags were")} removed.");
+
+            #endregion
+
+            // notify the user to watch the status bar in the lower-left corner for the next 3 revisions
+            Utils.TaskDialogInformation("Q2 Revisions", "User Input Required",
+                "The next 3 revisions require user input. Please follow the prompts in the lower-left corner of the Revit window.");
+
+            #region Revision 11: Add 6 LED fixtures at Family/Living
+
+            // prompt the user to select the ceiling fan; click Finish without selecting to skip
+            FamilyInstance ceilingFan = null;
+            try
+            {
+                IList<Reference> fanRefs = uidoc.Selection.PickObjects(
+                    ObjectType.Element,
+                    new CeilingFanSelectionFilter(),
+                    "Select the ceiling fan in the Family/Living Room, then click Finish. Click Finish without selecting to skip.");
+
+                // use the first selected fan if any were picked
+                if (fanRefs != null && fanRefs.Count > 0)
+                    ceilingFan = curDoc.GetElement(fanRefs[0]) as FamilyInstance;
+            }
+            catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+            {
+                // user pressed Esc - skip this revision
+            }
+
+            // only place fixtures if the user selected a fan
+            if (ceilingFan != null)
+            {
+                // create a transaction
+                using (Transaction t11 = new Transaction(curDoc, "Add LED Fixtures"))
+                {
+                    // start the transaction
+                    t11.Start();
+
+                    // call the method to place 6 LED fixtures around the ceiling fan
+                    AddLEDFixtures(curDoc, uidoc.ActiveView, ceilingFan);
+
+                    // commit the transaction
+                    t11.Commit();
+                }
+
+                // notify the user that LED fixtures were placed
+                Utils.TaskDialogInformation("Q2 Revisions", "Add LED Fixtures",
+                    "6 LED fixtures were added around the selected ceiling fan.");
+            }
+
+            #endregion
+
+            #region Revision 12: Separate switches for bath lights & exhaust fans
 
 
 
@@ -303,7 +378,7 @@ namespace Q2_Revisions
 
             #endregion
 
-            #region Revision 11: Separate switches for bath lights & exhaust fans
+            #region Revision 13: Move data distribution panel to Utility Room
 
 
 
@@ -313,16 +388,7 @@ namespace Q2_Revisions
 
             #endregion
 
-            #region Revision 12: Move data distribution panel to Utility Room
-
-
-
-
-
-
-
-            #endregion
-
+           
 
             #endregion
 
@@ -336,6 +402,10 @@ namespace Q2_Revisions
                 $"{planName} – Q2 Revisions: Items to Complete Manually",
                 string.Empty,
                 "1. Review client redlines for SRO stem wall removal. Stem walls that contain electrical elements shall remain regardless of client redlines.",
+                "2. Review & finalize location of new LED fixtures, if added, at Family ceiling fan. Add CL dimensions as required.",
+                "3. Review location of LED fixtures at tubs & showers & move if required.",
+                "4. Verify switch for coach lights is located in Garage.",
+                "5. Verify switch for Covered Porch lights is located in Entry/Foyer.",
             });
 
 
@@ -351,15 +421,6 @@ namespace Q2_Revisions
 
             return Result.Succeeded;
         }
-
-       
-
-
-
-
-
-
-
 
         #region Floor Plan Revisions Methods
 
@@ -924,6 +985,168 @@ namespace Q2_Revisions
                 typeComments.Set("Dual Cat6");
         }
 
+        /// <summary>
+        /// method to find all LT-No Base / LED-WP fixtures located in rooms whose name contains "Bath",
+        /// swap each to LT-No Base / LED, and delete the accompanying Lighting Fixture tag.
+        /// Standard LED fixtures are not tagged, so the WP tag is removed without replacement.
+        /// </summary>
+        private int SwapWPLEDInBathrooms(Document curDoc)
+        {
+            // find the standard LED type to swap to
+            FamilySymbol ledSymbol = Utils.FindFamilySymbol(curDoc, "LT-No Base", "LED");
+
+            // return if the standard LED type is not found
+            if (ledSymbol == null) return 0;
+
+            // activate the symbol if it is not already active
+            if (!ledSymbol.IsActive) ledSymbol.Activate();
+
+            // collect all LT-No Base / LED-WP instances project-wide
+            List<FamilyInstance> wpFixtures = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_LightingFixtures)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi =>
+                {
+                    // check family name and type name
+                    string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
+                    return famName.Contains("LT-No Base") &&
+                           fi.Symbol.Name.Equals("LED-WP", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+
+            // collect all lighting fixture tags upfront for efficient lookup
+            List<IndependentTag> allTags = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_LightingFixtureTags)
+                .OfClass(typeof(IndependentTag))
+                .Cast<IndependentTag>()
+                .ToList();
+
+            // track how many fixtures were swapped
+            int count = 0;
+
+            foreach (FamilyInstance fi in wpFixtures)
+            {
+                // get the fixture's location point
+                XYZ loc = (fi.Location as LocationPoint)?.Point;
+                if (loc == null) continue;
+
+                // try 1' above the floor plane first, then 1' below as a fallback
+                // (face-hosted ceiling fixtures are at Elevation from Level = 0', so the room
+                // interior is 1' above that reference plane)
+                Room room = curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z + 1.0))
+                         ?? curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z - 1.0));
+
+                // skip if no room was found or the room name does not contain "Bath"
+                if (room == null) continue;
+                string roomName = room.LookupParameter("Name")?.AsString() ?? string.Empty;
+                if (roomName.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                // delete any Lighting Fixture tags associated with this fixture
+                List<ElementId> tagIds = allTags
+                    .Where(t => t.GetTaggedElementIds().Any(id => id.HostElementId == fi.Id))
+                    .Select(t => t.Id)
+                    .ToList();
+
+                foreach (ElementId tagId in tagIds)
+                    curDoc.Delete(tagId);
+
+                // swap the fixture type to standard LED
+                fi.ChangeTypeId(ledSymbol.Id);
+
+                count++;
+            }
+
+            // return the number of fixtures swapped
+            return count;
+        }
+
+        /// <summary>
+        /// method to place 6 LT-No Base / LED fixtures around the selected ceiling fan.
+        /// 2 fixtures are placed directly in line with the fan (left and right along the view's
+        /// RightDirection) at 3'-0" from center. 4 fixtures are placed diagonally at 3'-0" in
+        /// both axes simultaneously (upper-left, upper-right, lower-left, lower-right).
+        /// Uses the active view's RightDirection and UpDirection to handle rotated viewports.
+        /// </summary>
+        private void AddLEDFixtures(Document curDoc, View activeView, FamilyInstance ceilingFan)
+        {
+            // find the LT-No Base / LED family symbol
+            FamilySymbol ledSymbol = Utils.FindFamilySymbol(curDoc, "LT-No Base", "LED");
+
+            // return if the symbol is not found
+            if (ledSymbol == null) return;
+
+            // activate the symbol if it is not already active
+            if (!ledSymbol.IsActive) ledSymbol.Activate();
+
+            // get the fan's center point in model coordinates
+            XYZ fanCenter = (ceilingFan.Location as LocationPoint)?.Point;
+
+            // return if the fan location is not found
+            if (fanCenter == null) return;
+
+            // get the view's orientation vectors to handle rotated viewports
+            XYZ right = activeView.RightDirection;
+            XYZ up = activeView.UpDirection;
+
+            // distance from fan center to each fixture in feet
+            double d = 3.0;
+
+            // calculate the 6 fixture positions relative to the fan center
+            List<XYZ> positions = new List<XYZ>
+            {
+                fanCenter + d * right,                   // directly right (in line with fan)
+                fanCenter - d * right,                   // directly left  (in line with fan)
+                fanCenter + d * right + d * up,          // upper-right diagonal
+                fanCenter - d * right + d * up,          // upper-left diagonal
+                fanCenter + d * right - d * up,          // lower-right diagonal
+                fanCenter - d * right - d * up,          // lower-left diagonal
+            };
+
+            // get the fan's host level for placement
+            Level hostLevel = curDoc.GetElement(ceilingFan.LevelId) as Level;
+
+            // read the fan's elevation offset from its host level so fixtures match exactly
+            double fanOffset = ceilingFan.get_Parameter(BuiltInParameter.INSTANCE_FREE_HOST_OFFSET_PARAM)?.AsDouble() ?? 0.0;
+
+            // place each LED fixture at the calculated position
+            foreach (XYZ pos in positions)
+            {
+                // flatten to the level plane; elevation will be set explicitly after placement
+                XYZ placePoint = new XYZ(pos.X, pos.Y, hostLevel.Elevation);
+
+                // place the fixture on the level
+                FamilyInstance ledInst = curDoc.Create.NewFamilyInstance(placePoint, ledSymbol, hostLevel, StructuralType.NonStructural);
+
+                // set the elevation offset to match the fan so the fixture sits at the same height
+                Parameter offsetParam = ledInst.get_Parameter(BuiltInParameter.INSTANCE_FREE_HOST_OFFSET_PARAM);
+                if (offsetParam != null && !offsetParam.IsReadOnly)
+                    offsetParam.Set(fanOffset);
+            }
+        }        
+
+        #endregion
+
+        #region Selection Filters
+
+        /// <summary>
+        /// selection filter that restricts element picking to LT-No Base / Ceiling Fan instances only.
+        /// </summary>
+        private class CeilingFanSelectionFilter : ISelectionFilter
+        {
+            public bool AllowElement(Element elem)
+            {
+                FamilyInstance fi = elem as FamilyInstance;
+                if (fi == null) return false;
+
+                // check that the family name contains "LT-No Base" and the type is "Ceiling Fan"
+                string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
+                return famName.Contains("LT-No Base") &&
+                       fi.Symbol.Name.Equals("Ceiling Fan", StringComparison.OrdinalIgnoreCase);
+            }
+
+            public bool AllowReference(Reference reference, XYZ position) => false;
+        }
 
         #endregion
     }
