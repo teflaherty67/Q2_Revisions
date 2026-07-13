@@ -370,6 +370,82 @@ namespace Q2_Revisions
 
             #region Revision 12: Separate switches for bath lights & exhaust fans
 
+            // get all bath and powder rooms grouped by level, ordered from lowest to highest elevation
+            var bathRoomsByLevel = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(SpatialElement))
+                .Cast<SpatialElement>()
+                .Where(r => r.Location != null)
+                .Where(r =>
+                {
+                    string name = r.LookupParameter("Name")?.AsString() ?? string.Empty;
+                    return name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           name.IndexOf("Powder", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           name.IndexOf("Pwdr", StringComparison.OrdinalIgnoreCase) >= 0;
+                })
+                .GroupBy(r => r.LevelId)
+                .OrderBy(g => (curDoc.GetElement(g.Key) as Level)?.Elevation ?? 0)
+                .ToList();
+
+            // track total copied switches
+            int switchCopyCount = 0;
+
+            // process each level that has bath or powder rooms
+            foreach (var levelGroup in bathRoomsByLevel)
+            {
+                // get the level element
+                Level bathLevel = curDoc.GetElement(levelGroup.Key) as Level;
+                if (bathLevel == null) continue;
+
+                // switch to the electrical view for this level
+                View elecView = GetElectricalViewForLevel(curDoc, bathLevel.Name);
+                if (elecView != null)
+                    uidoc.ActiveView = elecView;
+
+                // prompt the user to select light switches on this level
+                IList<Reference> switchRefs = null;
+                try
+                {
+                    switchRefs = uidoc.Selection.PickObjects(
+                        ObjectType.Element,
+                        new WallHostedSelectionFilter(),
+                        $"[{bathLevel.Name}] Select light switches to copy in bath/powder rooms, then click Finish. Click Finish without selecting to skip this level.");
+                }
+                catch (Autodesk.Revit.Exceptions.OperationCanceledException)
+                {
+                    // user pressed Esc - skip this level
+                    continue;
+                }
+
+                // skip if no switches were selected
+                if (switchRefs == null || switchRefs.Count == 0) continue;
+
+                // process all selected switches for this level in one transaction
+                using (Transaction tSwitch = new Transaction(curDoc, $"Copy Bath Switches – {bathLevel.Name}"))
+                {
+                    // start the transaction
+                    tSwitch.Start();
+
+                    // copy each selected switch to the side opposite its nearest door
+                    foreach (Reference switchRef in switchRefs)
+                    {
+                        FamilyInstance switchInst = curDoc.GetElement(switchRef) as FamilyInstance;
+                        if (switchInst == null) continue;
+
+                        switchCopyCount += CopySwitchOppositeDoor(curDoc, switchInst);
+                    }
+
+                    // commit the transaction
+                    tSwitch.Commit();
+                }
+            }
+
+            // notify the user of switch copy results
+            Utils.TaskDialogInformation("Q2 Revisions", "Copy Bath/Powder Switches",
+                switchCopyCount == 0
+                    ? "No light switches were copied."
+                    : $"{switchCopyCount} light {(switchCopyCount == 1 ? "switch was" : "switches were")} copied in bath/powder rooms.");
+
+
 
 
 
@@ -388,7 +464,7 @@ namespace Q2_Revisions
 
             #endregion
 
-           
+
 
             #endregion
 
@@ -420,6 +496,16 @@ namespace Q2_Revisions
             });
 
             return Result.Succeeded;
+        }
+
+        private int CopySwitchOppositeDoor(Document curDoc, FamilyInstance switchInst)
+        {
+            throw new NotImplementedException();
+        }
+
+        private View GetElectricalViewForLevel(Document curDoc, string name)
+        {
+            throw new NotImplementedException();
         }
 
         #region Floor Plan Revisions Methods
@@ -1123,11 +1209,27 @@ namespace Q2_Revisions
                 if (offsetParam != null && !offsetParam.IsReadOnly)
                     offsetParam.Set(fanOffset);
             }
-        }        
+        }
 
         #endregion
 
         #region Selection Filters
+
+        /// <summary>
+        /// selection filter that restricts element picking to wall-hosted family instances only,
+        /// used for selecting light switches mounted on walls.
+        /// </summary>
+        private class WallHostedSelectionFilter : ISelectionFilter
+        {
+            public bool AllowElement(Element elem)
+            {
+                FamilyInstance fi = elem as FamilyInstance;
+                return fi?.Host is Wall;
+            }
+
+            public bool AllowReference(Reference reference, XYZ position) => false;
+        }
+
 
         /// <summary>
         /// selection filter that restricts element picking to LT-No Base / Ceiling Fan instances only.
