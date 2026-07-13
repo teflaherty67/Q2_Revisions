@@ -197,16 +197,52 @@ namespace Q2_Revisions
             // notify the user of front and rear door updates
             if (specLevel != "Terrata")
             {
+                // switch to the door schedule view so the user can see the changes
+                View doorSchedule = Utils.GetScheduleByNameContains(curDoc, "Door Schedule");
+                if (doorSchedule != null)
+                    uidoc.ActiveView = doorSchedule;
+
                 // build and show the notification message
                 Utils.TaskDialogInformation("Q2 Revisions", "Update Entry Doors",
                     "The front and rear door families were updated, and types set per the selected spec level.");
             }
+
 
             #endregion
 
             #region Electrical Revisions
 
             #region Revision 7: Remove all TV & Phone Jacks
+
+            // create variable for deleted outlet count
+            int outletCount = 0;
+
+            // set the active view to the First Floor Electrical view
+            View electricalView = GetFirstFloorElectricalView(curDoc);
+            if (electricalView != null)
+                uidoc.ActiveView = electricalView;
+
+            // create a transaction
+            using (Transaction t7 = new Transaction(curDoc, "Remove PH/TV Outlets"))
+            {
+                // start the transaction
+                t7.Start();
+
+                // call the method to remove telephone and television outlets
+                outletCount = RemoveTelTVOutlets(curDoc);
+
+                // commit the transaction
+                t7.Commit();
+            }
+
+            // notify the user of outlet removal with proper grammar
+            string outletMsg = outletCount == 0
+                ? "No telephone or television jacks were found in the project."
+                : outletCount == 1
+                    ? "There was 1 telephone and/or television jack removed from the project."
+                    : $"There were {outletCount} telephone and/or television jacks removed from the project.";
+
+            Utils.TaskDialogInformation("Q2 Revisions", "Remove PH & TV Outlets", outletMsg);
 
 
 
@@ -286,7 +322,11 @@ namespace Q2_Revisions
 
             return Result.Succeeded;
         }
-      
+
+       
+
+       
+
 
         #region Floor Plan Revisions Methods
 
@@ -721,6 +761,75 @@ namespace Q2_Revisions
                 door.ChangeTypeId(newType.Id);
             }
         }
+
+        #endregion
+
+        #region Electrical Plan Revisions Methods
+
+        /// <summary>
+        /// method to find the First Floor Electrical view in the current document.
+        /// searches for a ViewPlan associated with the First Floor level whose name contains "Electrical".
+        /// </summary>
+        private View GetFirstFloorElectricalView(Document curDoc)
+        {
+            // find the level named "First Floor"
+            Level firstFloor = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
+
+            // return null if the level is not found
+            if (firstFloor == null) return null;
+
+            // find and return a ViewPlan associated with First Floor whose name contains "Electrical"
+            return new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewPlan))
+                .Cast<ViewPlan>()
+                .FirstOrDefault(v => v.GenLevel?.Id == firstFloor.Id &&
+                                     v.Name.IndexOf("Electrical", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        /// <summary>
+        /// method to remove all telephone and television outlet instances from the current document.
+        /// finds electrical fixture instances in the El-Wall Base or El-No Base families
+        /// whose type name is Outlet-Television, Outlet-Telephone, or Outlet-Telephone/Television.
+        /// </summary>
+        private int RemoveTelTVOutlets(Document curDoc)
+        {
+            // define the type names to search for
+            List<string> targetTypeNames = new List<string>
+            {
+                "Outlet-Television",
+                "Outlet-Telephone",
+                "Outlet-Telephone/Television"
+            };
+
+            // collect all electrical fixture instances in the El-Wall Base or El-No Base families
+            // whose type name matches one of the target type names
+            List<ElementId> toDelete = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi =>
+                {
+                    // check if the family name contains "El-Wall Base" or "El-No Base"
+                    string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
+                    if (!famName.Contains("EL-Wall Base") && !famName.Contains("EL-No Base"))
+                        return false;
+
+                    // check if the type name matches one of the target type names
+                    return targetTypeNames.Any(t => fi.Symbol.Name.Equals(t, StringComparison.OrdinalIgnoreCase));
+                })
+                .Select(fi => fi.Id)
+                .ToList();
+
+            // delete each outlet instance
+            foreach (ElementId id in toDelete)
+                curDoc.Delete(id);
+
+            // return the number of outlets deleted
+            return toDelete.Count;
+        }
+
 
         #endregion
     }
