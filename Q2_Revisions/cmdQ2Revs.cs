@@ -462,12 +462,39 @@ namespace Q2_Revisions
 
             #endregion
 
+            #region Revision 14: WH Outlet Note Revision
+
+            // set the active view to the first floor electrical view
+            View elecViewForNote = GetFirstFloorElectricalView(curDoc);
+            if (elecViewForNote != null)
+                uidoc.ActiveView = elecViewForNote;
+
+            // create a transaction
+            using (Transaction t14 = new Transaction(curDoc, "Add WH Outlet Note"))
+            {
+                // start the transaction
+                t14.Start();
+
+                // call the method to add the WH outlet note
+                if (elecViewForNote != null)
+                    AddWHTanklessNote(curDoc, elecViewForNote);
+
+                // commit the transaction
+                t14.Commit();
+            }
+
+            // notify the user
+            Utils.TaskDialogInformation("Q2 Revisions", "Add WH Outlet Note",
+                "WH outlet note added to the First Floor Electrical Plan.");
+
+            #endregion
+
 
             #endregion
 
             #region Interior Elevation Revisions
 
-            #region Revision 14: Raise Vanity Counter Height to 3'-0"
+            #region Revision 15: Raise Vanity Counter Height to 3'-0"
 
             // switch to the interior elevations sheet that contains the Master Bath
             ViewSheet interiorSheet = GetMasterBathInteriorSheet(curDoc);
@@ -498,12 +525,17 @@ namespace Q2_Revisions
 
             #endregion
 
-            #region Revision 15: Check Master Bath Vanity Length
+            #region Revision 16: Check Master Bath Vanity Length
 
             // check the master bath vanity counter length and build conditional checklist line
             double mbCounterLength = GetMasterBathVanityCounterLength(curDoc);
 
             #endregion
+
+            #endregion
+
+            #region Detail Items Revisions
+
 
             #endregion
 
@@ -516,12 +548,15 @@ namespace Q2_Revisions
             {
                 $"{planName} – Q2 Revisions: Items to Complete Manually",
                 string.Empty,
-                "1. Review client redlines for SRO stem wall removal. Stem walls that contain electrical elements shall remain regardless of client redlines.",
-                "2. Review & finalize location of new LED fixtures, if added, at Family ceiling fan. Add CL dimensions as required.",
-                "3. Review location of LED fixtures at tubs & showers & move if required.",
-                "4. Verify switch for coach lights is located in Garage.",
-                "5. Verify switch for Covered Porch lights is located in Entry/Foyer.",
-                "6. Rework wiring at powder and bathrooms.",
+                "1. Review client redlines for all plan specific revisions.",
+                "2. Review client redlines for SRO stem wall removal. Stem walls that contain electrical elements shall remain regardless of client redlines.",
+                "3. Review & finalize location of new LED fixtures, if added, at Family ceiling fan. Add CL dimensions as required.",
+                "4. Review location of LED fixtures at tubs & showers & move if required.",
+                "5. Verify switch for coach lights is located in Garage.",
+                "6. Verify switch for Covered Porch lights is located in Entry/Foyer.",
+                "7. Rework wiring at powder and bathrooms.",
+                "8. Remove all rain diverers located above A/C units.",
+                "9. Verify location and justification of WH outlet note, and adjust leader to point to outlet.",
             };
 
             // add Master Bath cabinet revision note based on counter length (in feet; 60" = 5.0')
@@ -1336,6 +1371,51 @@ namespace Q2_Revisions
                 StructuralType.NonStructural);
 
             return newSwitch != null ? 1 : 0;
+        }
+
+        /// <summary>
+        /// finds water heater instances (Specialty Equipment or Mechanical Equipment) whose type
+        /// comments contain "WH" and places a TextNote "110V DED for tankless WH @ 48" FFF"
+        /// 3' to the right of each instance in the given electrical view.
+        /// returns the number of notes added.
+        /// </summary>
+        private void AddWHTanklessNote(Document curDoc, View electricalView)
+        {
+            // find the STANDARD text note type
+            TextNoteType noteType = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(TextNoteType))
+                .Cast<TextNoteType>()
+                .FirstOrDefault(t => t.Name.Equals("STANDARD", StringComparison.OrdinalIgnoreCase));
+
+            if (noteType == null) return;
+
+            // find the WH instance in Specialty Equipment or Mechanical Equipment
+            // where Type Comments contains "WH"
+            FamilyInstance whInst = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .WherePasses(new LogicalOrFilter(
+                    new ElementCategoryFilter(BuiltInCategory.OST_SpecialityEquipment),
+                    new ElementCategoryFilter(BuiltInCategory.OST_MechanicalEquipment)))
+                .Cast<FamilyInstance>()
+                .FirstOrDefault(fi =>
+                {
+                    string typeComments = fi.Symbol.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_COMMENTS)?.AsString() ?? string.Empty;
+                    return typeComments.IndexOf("WH", StringComparison.OrdinalIgnoreCase) >= 0;
+                });
+
+            if (whInst == null || !(whInst.Location is LocationPoint lp)) return;
+
+            // set text note options: left horizontal alignment
+            TextNoteOptions options = new TextNoteOptions(noteType.Id)
+            {
+                HorizontalAlignment = HorizontalTextAlignment.Left
+            };
+
+            // offset 3' to the right in the view's right direction
+            XYZ noteOrigin = lp.Point + electricalView.RightDirection * 3.0;
+
+            TextNote.Create(curDoc, electricalView.Id, noteOrigin,
+                "110V DED for tankless WH @ 48\" AFF", options);
         }
 
         #endregion
