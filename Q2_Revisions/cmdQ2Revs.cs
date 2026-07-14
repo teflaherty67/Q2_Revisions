@@ -477,7 +477,7 @@ namespace Q2_Revisions
 
                 // call the method to add the WH outlet note
                 if (elecViewForNote != null)
-                    AddWHTanklessNote(curDoc, elecViewForNote);
+                    AddWHOutletNote(curDoc, elecViewForNote);
 
                 // commit the transaction
                 t14.Commit();
@@ -539,9 +539,10 @@ namespace Q2_Revisions
 
             #endregion
 
+
             // build the list of manual checklist items for the .txt file
             string txtFilePath = System.IO.Path.Combine(
-                System.IO.Path.GetDirectoryName(curDoc.PathName), $"{planName}.txt");
+                System.IO.Path.GetDirectoryName(curDoc.PathName), $"{planName} Q2 Revisions.txt");
 
             // build the checklist lines dynamically so conditional items can be included
             List<string> txtLines = new List<string>
@@ -567,7 +568,8 @@ namespace Q2_Revisions
             else if (mbCounterLength > 5.0 + 0.001)
                 txtLines.Add($"{nextItem}. Revise Master Bath cabinets to: VSB | min 12\" VDB (3-drawer) | VSB.");
 
-
+            // write the manual checklist items to the .txt file
+            System.IO.File.WriteAllLines(txtFilePath, txtLines);
 
             // notify the user of results
             Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete",
@@ -1379,7 +1381,7 @@ namespace Q2_Revisions
         /// 3' to the right of each instance in the given electrical view.
         /// returns the number of notes added.
         /// </summary>
-        private void AddWHTanklessNote(Document curDoc, View electricalView)
+        private void AddWHOutletNote(Document curDoc, View electricalView)
         {
             // find the STANDARD text note type
             TextNoteType noteType = new FilteredElementCollector(curDoc)
@@ -1502,34 +1504,16 @@ namespace Q2_Revisions
         /// </summary>
         private double GetMasterBathVanityCounterLength(Document curDoc)
         {
-            // collect all --Vanity Counter-- instances
-            List<FamilyInstance> counters = new FilteredElementCollector(curDoc)
+            FamilyInstance counter = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
-                .Where(fi => (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
-                              .Contains("--Vanity Counter--"))
-                .ToList();
+                .FirstOrDefault(fi =>
+                    (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
+                        .Contains("--Vanity Counter--")
+                    && (fi.Room?.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? string.Empty)
+                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0);
 
-            foreach (FamilyInstance fi in counters)
-            {
-                // check if this instance is in a room whose name contains "Master Bath"
-                if (fi.Location is LocationPoint lp)
-                {
-                    Room room = curDoc.GetRoomAtPoint(lp.Point)
-                             ?? curDoc.GetRoomAtPoint(new XYZ(lp.Point.X, lp.Point.Y, lp.Point.Z + 1.0));
-
-                    if (room == null) continue;
-
-                    string roomName = room.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? string.Empty;
-                    if (roomName.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) < 0) continue;
-
-                    Parameter lengthParam = fi.LookupParameter("Length");
-                    if (lengthParam != null)
-                        return lengthParam.AsDouble();
-                }
-            }
-
-            return -1.0;
+            return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
         }
 
         #endregion
