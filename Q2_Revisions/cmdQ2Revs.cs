@@ -556,7 +556,7 @@ namespace Q2_Revisions
                 "5. Verify switch for coach lights is located in Garage.",
                 "6. Verify switch for Covered Porch lights is located in Entry/Foyer.",
                 "7. Rework wiring at powder and bathrooms.",
-                "8. Remove all rain diverers located above A/C units.",
+                "8. Remove all rain diverters located above A/C units.",
                 "9. Verify location and justification of WH outlet note, and adjust leader to point to outlet.",
             };
 
@@ -1519,6 +1519,25 @@ namespace Q2_Revisions
         #endregion
 
         #region Selection Filters
+
+        /// <summary>
+        /// selection filter that restricts element picking to EL-Wall Base / Switch instances only.
+        /// </summary>
+        private class SwitchSelectionFilter : ISelectionFilter
+        {
+            public bool AllowElement(Element elem)
+            {
+                FamilyInstance fi = elem as FamilyInstance;
+                if (fi == null) return false;
+
+                string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
+                return famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase)
+                    && fi.Symbol.Name.Equals("Switch", StringComparison.OrdinalIgnoreCase);
+            }
+
+            public bool AllowReference(Reference reference, XYZ position) => false;
+        }
+
 
         /// <summary>
         /// selection filter that restricts element picking to wall-hosted family instances only,

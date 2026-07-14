@@ -2399,7 +2399,7 @@ namespace Q2_Revisions.Common
 
         #region Task Dialog
 
-        /// <summary>
+        //// <summary>
         /// Displays a warning dialog to the user with custom title and message
         /// </summary>
         /// <param name="tdName">The internal name of the TaskDialog</param>
@@ -2429,6 +2429,7 @@ namespace Q2_Revisions.Common
             TaskDialogResult m_DialogResult = m_Dialog.Show();
         }
 
+
         /// <summary>
         /// Displays an information dialog to the user with custom title and message
         /// </summary>
@@ -2437,27 +2438,61 @@ namespace Q2_Revisions.Common
         /// <param name="textMessage">The main message content to display to the user</param>
         internal static void TaskDialogInformation(string tdName, string tdTitle, string textMessage)
         {
-            // Create a new TaskDialog with the specified name
-            TaskDialog m_Dialog = new TaskDialog(tdName);
+            // build the window programmatically to avoid needing a separate XAML file
+            var win = new System.Windows.Window
+            {
+                Title = "Q2 Revisions",
+                WindowStyle = System.Windows.WindowStyle.ToolWindow,
+                ResizeMode = System.Windows.ResizeMode.NoResize,
+                SizeToContent = System.Windows.SizeToContent.WidthAndHeight,
+                WindowStartupLocation = System.Windows.WindowStartupLocation.Manual,
+                Topmost = true,
+                ShowInTaskbar = false,
+                MinWidth = 320,
+                MaxWidth = 420,
+            };
 
-            // Set the warning icon to indicate this is a warning message
-            m_Dialog.MainIcon = Icon.TaskDialogIconInformation;
+            var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(16) };
 
-            // Set the custom title for the dialog
-            m_Dialog.Title = tdTitle;
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = tdTitle,
+                FontWeight = System.Windows.FontWeights.Bold,
+                FontSize = 13,
+                Margin = new System.Windows.Thickness(0, 0, 0, 8),
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+            });
 
-            // Disable automatic title prefixing to use our custom title exactly as specified
-            m_Dialog.TitleAutoPrefix = false;
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = textMessage,
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                Margin = new System.Windows.Thickness(0, 0, 0, 12),
+            });
 
-            // Set the main message content that will be displayed to the user
-            m_Dialog.MainContent = textMessage;
+            var okButton = new System.Windows.Controls.Button
+            {
+                Content = "OK",
+                Width = 75,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                IsDefault = true,
+            };
+            okButton.Click += (s, e) => win.Close();
+            panel.Children.Add(okButton);
 
-            // Add a Close button for the user to dismiss the dialog
-            m_Dialog.CommonButtons = TaskDialogCommonButtons.Close;
+            win.Content = panel;
 
-            // Display the dialog and capture the result (though we don't use it for warnings)
-            TaskDialogResult m_DialogResult = m_Dialog.Show();
+            // position top-right after the window renders so ActualWidth is known
+            win.Loaded += (s, e) =>
+            {
+                var screen = System.Windows.SystemParameters.WorkArea;
+                win.Left = screen.Right - win.ActualWidth - 16;
+                win.Top = screen.Top + 16;
+            };
+
+            win.ShowDialog();
         }
+
 
         /// <summary>
         /// Displays an error dialog to the user with custom title and message
