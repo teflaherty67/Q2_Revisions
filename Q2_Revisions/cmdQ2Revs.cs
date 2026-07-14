@@ -1,6 +1,7 @@
 using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.DB.Structure;
 using Q2_Revisions.Common;
+using System.Windows.Media.TextFormatting;
 
 namespace Q2_Revisions
 {
@@ -497,14 +498,21 @@ namespace Q2_Revisions
 
             #endregion
 
+            #region Revision 15: Check Master Bath Vanity Length
+
+            // check the master bath vanity counter length and build conditional checklist line
+            double mbCounterLength = GetMasterBathVanityCounterLength(curDoc);
+
+            #endregion
+
             #endregion
 
             // build the list of manual checklist items for the .txt file
             string txtFilePath = System.IO.Path.Combine(
                 System.IO.Path.GetDirectoryName(curDoc.PathName), $"{planName}.txt");
 
-            // write the manual checklist items to the .txt file
-            System.IO.File.WriteAllLines(txtFilePath, new[]
+            // build the checklist lines dynamically so conditional items can be included
+            List<string> txtLines = new List<string>
             {
                 $"{planName} – Q2 Revisions: Items to Complete Manually",
                 string.Empty,
@@ -514,7 +522,16 @@ namespace Q2_Revisions
                 "4. Verify switch for coach lights is located in Garage.",
                 "5. Verify switch for Covered Porch lights is located in Entry/Foyer.",
                 "6. Rework wiring at powder and bathrooms.",
-            });
+            };
+
+            // add Master Bath cabinet revision note based on counter length (in feet; 60" = 5.0')
+            // item number is derived from the current list count so new static lines don't require renumbering
+            int nextItem = txtLines.Count - 1; // subtract 1 to account for the blank line
+            if (mbCounterLength >= 5.0 - 0.001 && mbCounterLength <= 5.0 + 0.001)
+                txtLines.Add($"{nextItem}. Revise Master Bath cabinets to: VSB24 | VDB12 (3-drawer) | VSB24.");
+            else if (mbCounterLength > 5.0 + 0.001)
+                txtLines.Add($"{nextItem}. Revise Master Bath cabinets to: VSB | min 12\" VDB (3-drawer) | VSB.");
+
 
 
             // notify the user of results
@@ -1397,6 +1414,42 @@ namespace Q2_Revisions
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// finds the --Vanity Counter-- instance in the Master Bath room and returns its length in feet.
+        /// returns -1 if no counter is found.
+        /// </summary>
+        private double GetMasterBathVanityCounterLength(Document curDoc)
+        {
+            // collect all --Vanity Counter-- instances
+            List<FamilyInstance> counters = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(fi => (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
+                              .Contains("--Vanity Counter--"))
+                .ToList();
+
+            foreach (FamilyInstance fi in counters)
+            {
+                // check if this instance is in a room whose name contains "Master Bath"
+                if (fi.Location is LocationPoint lp)
+                {
+                    Room room = curDoc.GetRoomAtPoint(lp.Point)
+                             ?? curDoc.GetRoomAtPoint(new XYZ(lp.Point.X, lp.Point.Y, lp.Point.Z + 1.0));
+
+                    if (room == null) continue;
+
+                    string roomName = room.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? string.Empty;
+                    if (roomName.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    Parameter lengthParam = fi.LookupParameter("Length");
+                    if (lengthParam != null)
+                        return lengthParam.AsDouble();
+                }
+            }
+
+            return -1.0;
         }
 
         #endregion
