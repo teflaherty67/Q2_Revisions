@@ -231,7 +231,7 @@ namespace Q2_Revisions
                 t7.Start();
 
                 // call the method to remove telephone and television outlets
-                outletCount = RemoveTelTVOutlets(curDoc);
+                outletCount = RemovePHTVOutlets(curDoc);
 
                 // commit the transaction
                 t7.Commit();
@@ -370,8 +370,8 @@ namespace Q2_Revisions
 
             #region Revision 12: Separate switches for bath lights & exhaust fans
 
-            // get all bath and powder rooms grouped by level, ordered from lowest to highest elevation
-            var bathRoomsByLevel = new FilteredElementCollector(curDoc)
+            // get all bath and powder rooms ordered by level elevation then by room name
+            List<SpatialElement> bathRooms = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(SpatialElement))
                 .Cast<SpatialElement>()
                 .Where(r => r.Location != null)
@@ -382,45 +382,48 @@ namespace Q2_Revisions
                            name.IndexOf("Powder", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            name.IndexOf("Pwdr", StringComparison.OrdinalIgnoreCase) >= 0;
                 })
-                .GroupBy(r => r.LevelId)
-                .OrderBy(g => (curDoc.GetElement(g.Key) as Level)?.Elevation ?? 0)
+                .OrderBy(r => (curDoc.GetElement(r.LevelId) as Level)?.Elevation ?? 0)
+                .ThenBy(r => r.LookupParameter("Name")?.AsString() ?? string.Empty)
                 .ToList();
 
             // track total copied switches
             int switchCopyCount = 0;
 
-            // process each level that has bath or powder rooms
-            foreach (var levelGroup in bathRoomsByLevel)
+            // process each bath and powder room individually
+            foreach (SpatialElement bathRoom in bathRooms)
             {
-                // get the level element
-                Level bathLevel = curDoc.GetElement(levelGroup.Key) as Level;
-                if (bathLevel == null) continue;
+                // get the room name and level
+                string roomName = bathRoom.LookupParameter("Name")?.AsString() ?? "Bath/Powder Room";
+                Level roomLevel = curDoc.GetElement(bathRoom.LevelId) as Level;
 
-                // switch to the electrical view for this level
-                View elecView = GetElectricalViewForLevel(curDoc, bathLevel.Name);
-                if (elecView != null)
-                    uidoc.ActiveView = elecView;
+                // switch to the electrical view for this room's level
+                if (roomLevel != null)
+                {
+                    View elecView = GetElectricalViewForLevel(curDoc, roomLevel.Name);
+                    if (elecView != null)
+                        uidoc.ActiveView = elecView;
+                }
 
-                // prompt the user to select light switches on this level
+                // prompt the user to select the switch in this specific room
                 IList<Reference> switchRefs = null;
                 try
                 {
                     switchRefs = uidoc.Selection.PickObjects(
                         ObjectType.Element,
                         new WallHostedSelectionFilter(),
-                        $"[{bathLevel.Name}] Select light switches to copy in bath/powder rooms, then click Finish. Click Finish without selecting to skip this level.");
+                        $"Select switch to copy at {roomName}. Click Finish without selecting to skip.");
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException)
                 {
-                    // user pressed Esc - skip this level
+                    // user pressed Esc - skip this room
                     continue;
                 }
 
-                // skip if no switches were selected
+                // skip if no switch was selected
                 if (switchRefs == null || switchRefs.Count == 0) continue;
 
-                // process all selected switches for this level in one transaction
-                using (Transaction tSwitch = new Transaction(curDoc, $"Copy Bath Switches – {bathLevel.Name}"))
+                // copy the selected switch in a transaction
+                using (Transaction tSwitch = new Transaction(curDoc, $"Copy Switch – {roomName}"))
                 {
                     // start the transaction
                     tSwitch.Start();
@@ -446,12 +449,6 @@ namespace Q2_Revisions
                     : $"{switchCopyCount} light {(switchCopyCount == 1 ? "switch was" : "switches were")} copied in bath/powder rooms.");
 
 
-
-
-
-
-
-
             #endregion
 
             #region Revision 13: Move data distribution panel to Utility Room
@@ -465,6 +462,40 @@ namespace Q2_Revisions
             #endregion
 
 
+            #endregion
+
+            #region Interior Elevation Revisions
+
+            #region Revision 14: Raise Vanity Counter Height to 3'-0"
+
+            // switch to the interior elevations sheet that contains the Master Bath
+            ViewSheet interiorSheet = GetMasterBathInteriorSheet(curDoc);
+            if (interiorSheet != null)
+                uidoc.ActiveView = interiorSheet;
+
+            // create variables for updated element counts
+            int vanityCounterCount = 0;
+            int vanityCabinetCount = 0;
+
+            // create a transaction
+            using (Transaction t14 = new Transaction(curDoc, "Update Vanity Heights"))
+            {
+                // start the transaction
+                t14.Start();
+
+                // call the method to update vanity counter and cabinet heights
+                UpdateVanityHeights(curDoc, out vanityCounterCount, out vanityCabinetCount);
+
+                // commit the transaction
+                t14.Commit();
+            }
+
+            // notify the user of vanity height update results
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Vanity Heights",
+                $"{vanityCounterCount} vanity {(vanityCounterCount == 1 ? "counter was" : "counters were")} updated to 3'-0\" " +
+                $"and {vanityCabinetCount} vanity {(vanityCabinetCount == 1 ? "cabinet was" : "cabinets were")} updated to 2'-10½\".");
+
+            #endregion
 
             #endregion
 
@@ -482,6 +513,7 @@ namespace Q2_Revisions
                 "3. Review location of LED fixtures at tubs & showers & move if required.",
                 "4. Verify switch for coach lights is located in Garage.",
                 "5. Verify switch for Covered Porch lights is located in Entry/Foyer.",
+                "6. Rework wiring at powder and bathrooms.",
             });
 
 
@@ -498,16 +530,8 @@ namespace Q2_Revisions
             return Result.Succeeded;
         }
 
-        private int CopySwitchOppositeDoor(Document curDoc, FamilyInstance switchInst)
-        {
-            throw new NotImplementedException();
-        }
-
-        private View GetElectricalViewForLevel(Document curDoc, string name)
-        {
-            throw new NotImplementedException();
-        }
-
+       
+        
         #region Floor Plan Revisions Methods
 
         /// <summary>
@@ -970,11 +994,34 @@ namespace Q2_Revisions
         }
 
         /// <summary>
+        /// method to find the electrical ViewPlan for any named level.
+        /// searches for a ViewPlan associated with the given level whose name contains "Electrical".
+        /// </summary>
+        private View GetElectricalViewForLevel(Document curDoc, string levelName)
+        {
+            // find the level by name
+            Level level = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .FirstOrDefault(l => l.Name.Equals(levelName, StringComparison.OrdinalIgnoreCase));
+
+            // return null if the level is not found
+            if (level == null) return null;
+
+            // find and return a ViewPlan associated with that level whose name contains "Electrical"
+            return new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewPlan))
+                .Cast<ViewPlan>()
+                .FirstOrDefault(v => v.GenLevel?.Id == level.Id &&
+                                     v.Name.IndexOf("Electrical", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        /// <summary>
         /// method to remove all telephone and television outlet instances from the current project.
         /// finds electrical fixture instances in the El-Wall Base or El-No Base families
         /// whose type name is Outlet-Television, Outlet-Telephone, or Outlet-Telephone/Television.
         /// </summary>
-        private int RemoveTelTVOutlets(Document curDoc)
+        private int RemovePHTVOutlets(Document curDoc)
         {
             // define the type names to search for
             List<string> targetTypeNames = new List<string>
@@ -1208,6 +1255,147 @@ namespace Q2_Revisions
                 Parameter offsetParam = ledInst.get_Parameter(BuiltInParameter.INSTANCE_FREE_HOST_OFFSET_PARAM);
                 if (offsetParam != null && !offsetParam.IsReadOnly)
                     offsetParam.Set(fanOffset);
+            }
+        }
+
+        /// <summary>
+        /// method to copy a wall-hosted light switch 4" away on the side of the switch
+        /// that is opposite the nearest door. uses the wall direction to determine which
+        /// side the door is on relative to the switch, then offsets in the opposing direction.
+        /// </summary>
+        private int CopySwitchOppositeDoor(Document curDoc, FamilyInstance switchInst)
+        {
+            // get the host wall; skip if not wall-hosted
+            Wall hostWall = switchInst.Host as Wall;
+            if (hostWall == null) return 0;
+
+            // get the switch's location point in model coordinates
+            XYZ switchPt = (switchInst.Location as LocationPoint)?.Point;
+            if (switchPt == null) return 0;
+
+            // get the wall's direction vector
+            Line wallLine = (hostWall.Location as LocationCurve)?.Curve as Line;
+            if (wallLine == null) return 0;
+            XYZ wallDir = wallLine.Direction;
+
+            // find the door nearest to the switch within 10 feet
+            FamilyInstance nearestDoor = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_Doors)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .Where(d =>
+                {
+                    XYZ doorPt = (d.Location as LocationPoint)?.Point;
+                    return doorPt != null && switchPt.DistanceTo(doorPt) <= 10.0;
+                })
+                .OrderBy(d => switchPt.DistanceTo((d.Location as LocationPoint).Point))
+                .FirstOrDefault();
+
+            // determine which direction along the wall is OPPOSITE the door
+            XYZ copyDir = wallDir;
+
+            if (nearestDoor != null)
+            {
+                XYZ doorPt = (nearestDoor.Location as LocationPoint)?.Point;
+                if (doorPt != null)
+                {
+                    // project the vector from switch to door onto the wall direction
+                    double dot = (doorPt - switchPt).DotProduct(wallDir);
+
+                    // if dot > 0, door is in the positive wall direction — copy goes negative
+                    // if dot < 0, door is in the negative wall direction — copy goes positive
+                    copyDir = dot > 0 ? wallDir.Negate() : wallDir;
+                }
+            }
+
+            // offset 4 inches (4/12 feet) along the wall in the opposite direction from the door
+            XYZ newPt = switchPt + copyDir.Multiply(4.0 / 12.0);
+
+            // create the new switch instance on the same host wall at the offset position
+            FamilyInstance newSwitch = curDoc.Create.NewFamilyInstance(
+                newPt, switchInst.Symbol, hostWall, switchInst.LookupParameter("Level") != null
+                    ? curDoc.GetElement(switchInst.LevelId) as Level
+                    : null,
+                StructuralType.NonStructural);
+
+            return newSwitch != null ? 1 : 0;
+        }
+
+        #endregion
+
+        #region Interior Elevation Revisions Methods
+
+        /// <summary>
+        /// method to find the sheet containing interior elevations for the Master Bath.
+        /// searches all sheets for a viewport whose view name contains "Master Bath".
+        /// falls back to any sheet whose name contains "Interior" if no Master Bath view is found.
+        /// </summary>
+        private ViewSheet GetMasterBathInteriorSheet(Document curDoc)
+        {
+            // collect all views whose name contains "Bath", preferring "Master Bath"
+            List<View> bathViews = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .Where(v => v.Name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderByDescending(v => v.Name.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+
+            foreach (View view in bathViews)
+            {
+                string sheetNumber = view.LookupParameter("Sheet Number")?.AsString();
+                if (string.IsNullOrEmpty(sheetNumber)) continue;
+
+                ViewSheet sheet = Utils.GetSheetsByNumber(curDoc, sheetNumber).FirstOrDefault();
+                if (sheet != null)
+                    return sheet;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// method to update the Counter Height on all --Vanity Counter-- instances to 3'-0"
+        /// and the Cabinet Height on all families containing "Vanity Cabinet" to 2'-10½".
+        /// </summary>
+        private void UpdateVanityHeights(Document curDoc, out int counterCount, out int cabinetCount)
+        {
+            // initialize counts
+            counterCount = 0;
+            cabinetCount = 0;
+
+            // collect all family instances project-wide
+            List<FamilyInstance> allInstances = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .ToList();
+
+            foreach (FamilyInstance fi in allInstances)
+            {
+                // get the family name using the reliable built-in parameter
+                string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
+
+                // check for --Vanity Counter-- family and update Counter Height to 3'-0"
+                if (famName.Contains("--Vanity Counter--"))
+                {
+                    Parameter counterHeight = fi.LookupParameter("Counter Height");
+                    if (counterHeight != null && !counterHeight.IsReadOnly)
+                    {
+                        counterHeight.Set(3.0);
+                        counterCount++;
+                    }
+                }
+
+                // check for any family containing "Vanity Cabinet" and update Cabinet Height to 2'-10½"
+                else if (famName.IndexOf("Vanity Cabinet", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    Parameter cabinetHeight = fi.LookupParameter("Cabinet Height");
+                    if (cabinetHeight != null && !cabinetHeight.IsReadOnly)
+                    {
+                        // 2'-10½" = 2 + 10.5/12 feet
+                        cabinetHeight.Set(2.0 + 10.5 / 12.0);
+                        cabinetCount++;
+                    }
+                }
             }
         }
 
