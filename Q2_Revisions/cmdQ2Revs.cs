@@ -206,7 +206,7 @@ namespace Q2_Revisions
                     uidoc.ActiveView = doorSchedule;
 
                 // build and show the notification message
-                Utils.TaskDialogInformation("Q2 Revisions", "Update ExteriorEntry Doors",
+                Utils.TaskDialogInformation("Q2 Revisions", "Update Exterior Entry Doors",
                     "The front and rear door families were updated, and types set per the selected spec level.");
             }
 
@@ -529,9 +529,58 @@ namespace Q2_Revisions
 
             #region Detail Items Revisions
 
+            // pre-step: open Views.rvt in the background and copy the 3 detail legends
+            int legendsCopied = CopyDetailLegends(curDoc, uiapp.Application);
+
+            Utils.TaskDialogInformation("Q2 Revisions", "Load Detail Legends",
+                legendsCopied == 0
+                    ? "No detail legends were copied. They may already exist in the project or Views.rvt could not be opened."
+                    : $"{legendsCopied} detail legend(s) were loaded into the project.");
+
+            #region Revision 17: Place Water Shut-Off Legend on Foundation Plan Sheets
+
+            int shutOffPlaced = 0;
+            using (Transaction t17 = new Transaction(curDoc, "Place Water Shut-Off Legend"))
+            {
+                t17.Start();
+                shutOffPlaced = PlaceWaterShutOffLegend(curDoc);
+                t17.Commit();
+            }
 
             #endregion
 
+            #region Revision 18: Replace Siding Eave Detail Legend on Exterior Elevation Sheets
+
+            int sidingReplaced = 0;
+            using (Transaction t18 = new Transaction(curDoc, "Replace Siding Eave Detail Legend"))
+            {
+                t18.Start();
+                sidingReplaced = ReplaceEaveDetailLegend(curDoc, "siding", "Eave Detail @ Siding w/ Spray Foam");
+                t18.Commit();
+            }
+
+            #endregion
+
+            #region Revision 19: Replace Brick Eave Detail Legend on Exterior Elevation Sheets (if present)
+
+            int brickReplaced = 0;
+            using (Transaction t19 = new Transaction(curDoc, "Replace Brick Eave Detail Legend"))
+            {
+                t19.Start();
+                brickReplaced = ReplaceEaveDetailLegend(curDoc, "brick", "Eave Detail @ Brick w/ Spray Foam");
+                t19.Commit();
+            }
+
+            #endregion
+
+            // single notification covering all three legend revisions
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Detail Legends",
+                $"Water Shut-Off detail was added to {shutOffPlaced} Foundation Plan sheet(s), " +
+                $"and {sidingReplaced + brickReplaced} instance(s) of eave details were updated on the Exterior Elevation sheets.");
+
+            #endregion
+
+            #region Manual Checklist Items
 
             // build the list of manual checklist items for the .txt file
             string txtFilePath = System.IO.Path.Combine(
@@ -566,6 +615,8 @@ namespace Q2_Revisions
             // write the manual checklist items to the .txt file
             System.IO.File.WriteAllLines(txtFilePath, txtLines);
 
+            #endregion
+
             // notify the user of results
             Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete",
                 $"Q2 Revisions completed. Refer to {planName}.txt file for revisions to complete manually.");
@@ -577,9 +628,7 @@ namespace Q2_Revisions
             });
 
             return Result.Succeeded;
-        }
-
-       
+        }       
         
         #region Floor Plan Revisions Methods
 
