@@ -206,7 +206,7 @@ namespace Q2_Revisions
                     uidoc.ActiveView = doorSchedule;
 
                 // build and show the notification message
-                Utils.TaskDialogInformation("Q2 Revisions", "Update Entry Doors",
+                Utils.TaskDialogInformation("Q2 Revisions", "Update ExteriorEntry Doors",
                     "The front and rear door families were updated, and types set per the selected spec level.");
             }
 
@@ -411,7 +411,7 @@ namespace Q2_Revisions
                 {
                     switchRefs = uidoc.Selection.PickObjects(
                         ObjectType.Element,
-                        new WallHostedSelectionFilter(),
+                        new SwitchSelectionFilter(),
                         $"Select switch to copy at {roomName}. Click Finish without selecting to skip.");
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException)
@@ -442,13 +442,6 @@ namespace Q2_Revisions
                     tSwitch.Commit();
                 }
             }
-
-            // notify the user of switch copy results
-            Utils.TaskDialogInformation("Q2 Revisions", "Copy Bath/Powder Switches",
-                switchCopyCount == 0
-                    ? "No light switches were copied."
-                    : $"{switchCopyCount} light {(switchCopyCount == 1 ? "switch was" : "switches were")} copied in bath/powder rooms.");
-
 
             #endregion
 
@@ -558,6 +551,8 @@ namespace Q2_Revisions
                 "7. Rework wiring at powder and bathrooms.",
                 "8. Remove all rain diverters located above A/C units.",
                 "9. Verify location and justification of WH outlet note, and adjust leader to point to outlet.",
+                "10. Revise siding trim at windows & doors to have 90-degree miters.",
+                "11. Add crown molding to upper cabinets, and add call-out note.",
             };
 
             // add Master Bath cabinet revision note based on counter length (in feet; 60" = 5.0')
@@ -1530,6 +1525,10 @@ namespace Q2_Revisions
                 FamilyInstance fi = elem as FamilyInstance;
                 if (fi == null) return false;
 
+                // must be in the Electrical Fixtures category
+                if (fi.Category?.Id.Value != (long)BuiltInCategory.OST_ElectricalFixtures)
+                    return false;
+
                 string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
                 return famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase)
                     && fi.Symbol.Name.Equals("Switch", StringComparison.OrdinalIgnoreCase);
@@ -1537,6 +1536,7 @@ namespace Q2_Revisions
 
             public bool AllowReference(Reference reference, XYZ position) => false;
         }
+
 
 
         /// <summary>
