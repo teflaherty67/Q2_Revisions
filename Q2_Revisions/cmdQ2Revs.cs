@@ -1562,6 +1562,184 @@ namespace Q2_Revisions
 
         #endregion
 
+        #region Detail Items Revisions Methods
+        
+        /// <summary>
+        /// opens Views.rvt in the background, copies the 3 detail legends into curDoc
+        /// (skipping any that already exist), then closes the source document.
+        /// returns the number of legends copied.
+        /// </summary>
+        private int CopyDetailLegends(Document curDoc, Autodesk.Revit.ApplicationServices.Application app)
+        {
+            // names of the legends to copy
+            List<string> legendNames = new List<string>
+            {
+                "Water Shut-Off",
+                "Eave Detail @ Brick w/ Spray Foam",
+                "Eave Detail @ Siding w/ Spray Foam",
+            };
+
+            // collect names already present in the current document so we can skip duplicates
+            HashSet<string> existingNames = new HashSet<string>(
+                new FilteredElementCollector(curDoc)
+                    .OfClass(typeof(View))
+                    .Cast<View>()
+                    .Select(v => v.Name),
+                StringComparer.OrdinalIgnoreCase);
+
+            // open Views.rvt in the background
+            Document sourceDoc = null;
+            try
+            {
+                OpenOptions openOptions = new OpenOptions { DetachFromCentralOption = DetachFromCentralOption.DoNotDetach };
+                ModelPath modelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(ViewsFilePath);
+                sourceDoc = app.OpenDocumentFile(modelPath, openOptions);
+            }
+            catch { return 0; }
+
+            if (sourceDoc == null) return 0;
+
+            int count = 0;
+            try
+            {
+                // find the requested legends in the source document, skipping ones already in curDoc
+                List<ElementId> toCopy = new FilteredElementCollector(sourceDoc)
+                    .OfClass(typeof(View))
+                    .Cast<View>()
+                    .Where(v => v.ViewType == ViewType.Legend
+                             && legendNames.Any(n => n.Equals(v.Name, StringComparison.OrdinalIgnoreCase))
+                             && !existingNames.Contains(v.Name))
+                    .Select(v => v.Id)
+                    .ToList();
+
+                if (toCopy.Count > 0)
+                {
+                    using (Transaction t = new Transaction(curDoc, "Copy Detail Legends"))
+                    {
+                        t.Start();
+                        ElementTransformUtils.CopyElements(sourceDoc, toCopy, curDoc, Transform.Identity, new CopyPasteOptions());
+                        t.Commit();
+                    }
+                    count = toCopy.Count;
+                }
+            }
+            finally
+            {
+                sourceDoc.Close(false);
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// finds the Water Shut-Off legend in curDoc and places it on every sheet
+        /// whose name contains "Foundation Plan". returns the number of sheets it was placed on.
+        /// </summary>
+        private int PlaceWaterShutOffLegend(Document curDoc)
+        {
+            // find the Water Shut-Off legend
+            View legend = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .FirstOrDefault(v => v.ViewType == ViewType.Legend
+                                  && v.Name.Equals("Water Shut-Off", StringComparison.OrdinalIgnoreCase));
+
+            if (legend == null) return 0;
+
+            // find all sheets whose name contains "Foundation Plan"
+            List<ViewSheet> foundationSheets = Utils.GetAllSheets(curDoc)
+                .Where(s => s.Name.IndexOf("Foundation Plan", StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+
+            if (foundationSheets.Count == 0) return 0;
+
+            int count = 0;
+            foreach (ViewSheet sheet in foundationSheets)
+            {
+                // skip if the legend is already on this sheet
+                bool alreadyPlaced = sheet.GetAllViewports()
+                    .Select(id => curDoc.GetElement(id) as Viewport)
+                    .Any(vp => vp != null && vp.ViewId == legend.Id);
+
+                if (alreadyPlaced) continue;
+
+                // place at a default position — user should verify and move as needed
+                Viewport.Create(curDoc, sheet.Id, legend.Id, new XYZ(0.5, 0.5, 0));
+                count++;
+            }
+
+            return count;
+        }
+
+
+
+
+
+
+
+
+        /// <summary>
+        /// finds Exterior Elevation sheets that have an existing eave detail legend whose name
+        /// starts with "Eave Detail" and contains the given keyword ("siding" or "brick"),
+        /// removes the old viewport, and places the new legend at the same center position.
+        /// returns the number of sheets where a replacement was made.
+        /// </summary>
+        private int ReplaceEaveDetailLegend(Document curDoc, string keyword, string newLegendName)
+        {
+            // find the new legend in the current document
+            View newLegend = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .FirstOrDefault(v => v.ViewType == ViewType.Legend
+                                  && v.Name.Equals(newLegendName, StringComparison.OrdinalIgnoreCase));
+
+            if (newLegend == null) return 0;
+
+            // find all Exterior Elevation sheets
+            List<ViewSheet> exteriorSheets = Utils.GetAllSheets(curDoc)
+                .Where(s => s.Name.IndexOf("Exterior Elevation", StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+
+            if (exteriorSheets.Count == 0) return 0;
+
+            int count = 0;
+            foreach (ViewSheet sheet in exteriorSheets)
+            {
+                // find a viewport on this sheet whose view is an eave detail matching the keyword
+                Viewport oldVp = sheet.GetAllViewports()
+                    .Select(id => curDoc.GetElement(id) as Viewport)
+                    .FirstOrDefault(vp =>
+                    {
+                        if (vp == null) return false;
+                        View v = curDoc.GetElement(vp.ViewId) as View;
+                        if (v == null || v.ViewType != ViewType.Legend) return false;
+                        string name = v.Name;
+                        return name.StartsWith("Eave Detail", StringComparison.OrdinalIgnoreCase)
+                            && name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
+                    });
+
+                if (oldVp == null) continue;
+
+                // record the center of the existing viewport before deleting it
+                XYZ center = oldVp.GetBoxCenter();
+
+                // remove the old viewport
+                curDoc.Delete(oldVp.Id);
+
+                // place the new legend at the same position
+                Viewport.Create(curDoc, sheet.Id, newLegend.Id, center);
+                count++;
+            }
+
+            return count;
+        }
+
+
+
+
+
+        #endregion
+
         #region Selection Filters
 
         /// <summary>
