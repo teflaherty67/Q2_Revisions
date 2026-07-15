@@ -444,6 +444,9 @@ namespace Q2_Revisions
                 }
             }
 
+            Utils.TaskDialogInformation("Q2 Revisions", "Separate Switches",
+                $"{switchCopyCount} switch(es) were duplicated for bath lights and exhaust fans. Verify placement and update circuits as needed.");
+
             #endregion
 
             #region Revision 13: Move data distribution panel to Utility Room
@@ -1528,18 +1531,62 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// moves the distribution panel group to the picked insertion point and turns on the
-        /// associated detail group in the active view.
+        /// places a new instance of the distribution panel group at the picked insertion point,
+        /// rotates it to face the target wall, and shows the attached detail group in the active view.
         /// </summary>
-        private void PlaceDistributionPanel(Document curDoc, UIDocument uidoc, Group panelGroup, XYZ insertPoint)
+        private void PlaceDistributionPanel(Document curDoc, UIDocument uidoc, Group panelGroup, XYZ insertPoint, Wall targetWall)
         {
-            // create an instance of the distribution panel group at the selected point
-            XYZ groupOrigin = (panelGroup.Location as LocationPoint)?.Point ?? XYZ.Zero;
-            ElementTransformUtils.MoveElement(curDoc, panelGroup.Id,
-                new XYZ(insertPoint.X - groupOrigin.X, insertPoint.Y - groupOrigin.Y, 0));
+            // get the original facing direction from the family instance in the group
+            XYZ originalFacing = GetGroupFacingDirection(curDoc, panelGroup);
 
-            // turn on the associated detail group in the active view
-            panelGroup.ShowAllAttachedDetailGroups(uidoc.ActiveView);
+            // get the inward normal of the target wall (facing into the room from the picked side)
+            XYZ targetNormal = GetWallInwardNormal(targetWall, insertPoint);
+
+            // place a new instance of the group type at the picked point
+            Group newInstance = curDoc.Create.PlaceGroup(insertPoint, panelGroup.GroupType);
+
+            // rotate the new instance so it faces the target wall
+            double angle = originalFacing.AngleOnPlaneTo(targetNormal, XYZ.BasisZ);
+            if (Math.Abs(angle) > 0.001)
+                ElementTransformUtils.RotateElement(curDoc, newInstance.Id,
+                    Line.CreateBound(insertPoint, insertPoint + XYZ.BasisZ), angle);
+
+            // show the attached detail group on the new instance in the active view
+            newInstance.ShowAllAttachedDetailGroups(uidoc.ActiveView);
+
+            // delete the original group instance left at the old location
+            curDoc.Delete(panelGroup.Id);
+        }
+
+        /// <summary>
+        /// returns the facing orientation of the first wall-hosted family instance found in the group.
+        /// falls back to XYZ.BasisX if none is found.
+        /// </summary>
+        private XYZ GetGroupFacingDirection(Document curDoc, Group group)
+        {
+            foreach (ElementId id in group.GetMemberIds())
+            {
+                FamilyInstance fi = curDoc.GetElement(id) as FamilyInstance;
+                if (fi != null && fi.Host is Wall)
+                    return fi.FacingOrientation;
+            }
+            return XYZ.BasisX;
+        }
+
+        /// <summary>
+        /// returns the wall's inward normal on the side of nearPoint.
+        /// </summary>
+        private XYZ GetWallInwardNormal(Wall wall, XYZ nearPoint)
+        {
+            Line wallLine = (wall.Location as LocationCurve)?.Curve as Line;
+            if (wallLine == null) return XYZ.BasisX;
+
+            XYZ wallDir = wallLine.Direction.Normalize();
+            XYZ normal1 = new XYZ(-wallDir.Y, wallDir.X, 0);
+            XYZ wallMid = wallLine.Evaluate(0.5, true);
+
+            // pick whichever normal points toward nearPoint
+            return (nearPoint - wallMid).DotProduct(normal1) >= 0 ? normal1 : normal1.Negate();
         }
 
         /// <summary>
