@@ -382,7 +382,9 @@ namespace Q2_Revisions
                     string name = r.LookupParameter("Name")?.AsString() ?? string.Empty;
                     return name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            name.IndexOf("Powder", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                           name.IndexOf("Pwdr", StringComparison.OrdinalIgnoreCase) >= 0;
+                           name.IndexOf("Pwdr", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           name.IndexOf("Utility", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           name.IndexOf("Laundry", StringComparison.OrdinalIgnoreCase) >= 0;
                 })
                 .OrderBy(r => (curDoc.GetElement(r.LevelId) as Level)?.Elevation ?? 0)
                 .ThenBy(r => r.LookupParameter("Name")?.AsString() ?? string.Empty)
@@ -399,9 +401,10 @@ namespace Q2_Revisions
                 Level roomLevel = curDoc.GetElement(bathRoom.LevelId) as Level;
 
                 // switch to the electrical view for this room's level
+                View elecView = null;
                 if (roomLevel != null)
                 {
-                    View elecView = GetElectricalViewForLevel(curDoc, roomLevel.Name);
+                    elecView = GetElectricalViewForLevel(curDoc, roomLevel.Name);
                     if (elecView != null)
                         uidoc.ActiveView = elecView;
                 }
@@ -431,12 +434,16 @@ namespace Q2_Revisions
                     tSwitch.Start();
 
                     // copy each selected switch to the side opposite its nearest door
+                    // and delete all room wiring except the wire attached to the original switch
                     foreach (Reference switchRef in switchRefs)
                     {
                         FamilyInstance switchInst = curDoc.GetElement(switchRef) as FamilyInstance;
                         if (switchInst == null) continue;
 
                         switchCopyCount += CopySwitchOppositeDoor(curDoc, switchInst);
+
+                        if (elecView != null)
+                            DeleteRoomWiringExceptSwitchWire(curDoc, elecView, bathRoom, switchInst);
                     }
 
                     // commit the transaction
@@ -445,7 +452,8 @@ namespace Q2_Revisions
             }
 
             Utils.TaskDialogInformation("Q2 Revisions", "Separate Switches",
-                $"{switchCopyCount} switch(es) were duplicated for bath lights and exhaust fans. Verify placement and update circuits as needed.");
+                $"{switchCopyCount} {(switchCopyCount == 1 ? "switch was" : "switches were")} duplicated to separate lights and exhaust fans at wet areas. Verify placement and update circuits as needed.");
+
 
             #endregion
 
@@ -473,12 +481,16 @@ namespace Q2_Revisions
 
             if (panelRefs != null && panelRefs.Count > 0)
             {
-                // transaction 1: group the selected elements
+                // transaction 1: group the selected elements, always including the device itself
+                FamilyInstance distBoxDevice = GetDistributionBoxDevice(curDoc);
                 Group panelGroup = null;
                 using (Transaction t13a = new Transaction(curDoc, "Group Distribution Panel"))
                 {
                     t13a.Start();
-                    panelGroup = GroupDistributionPanel(curDoc, panelRefs.Select(r => r.ElementId).ToList());
+                    List<ElementId> groupIds = panelRefs.Select(r => r.ElementId).ToList();
+                    if (distBoxDevice != null && !groupIds.Contains(distBoxDevice.Id))
+                        groupIds.Add(distBoxDevice.Id);
+                    panelGroup = GroupDistributionPanel(curDoc, groupIds);
                     t13a.Commit();
                 }
 
@@ -486,28 +498,42 @@ namespace Q2_Revisions
                 if (utilityElecView != null)
                     uidoc.ActiveView = utilityElecView;
 
-                // prompt the user to select a point on the wall behind the Utility Room door
-                XYZ insertPoint = null;
+                // prompt the user to pick the wall where the panel will go
+                Wall targetWall = null;
                 try
                 {
-                    insertPoint = uidoc.Selection.PickPoint(
-                        "Pick a point on the wall behind the Utility Room door for the distribution panel.");
+                    Reference wallRef = uidoc.Selection.PickObject(
+                        ObjectType.Element,
+                        new WallSelectionFilter(),
+                        "Pick the wall in the Utility Room where the distribution panel will be placed.");
+                    targetWall = curDoc.GetElement(wallRef) as Wall;
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
 
-                if (panelGroup != null && insertPoint != null)
+                // prompt the user to pick the exact location on that wall
+                XYZ insertPoint = null;
+                if (targetWall != null)
                 {
-                    // transaction 2: place the group at the selected point and turn on the detail group
+                    try
+                    {
+                        insertPoint = uidoc.Selection.PickPoint(
+                            "Pick the location on the wall for the distribution panel.");
+                    }
+                    catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
+                }
+
+                if (panelGroup != null && targetWall != null && insertPoint != null)
+                {
+                    // transaction 2: place a new instance of the group at the picked point and show the detail group
                     using (Transaction t13b = new Transaction(curDoc, "Place Distribution Panel"))
                     {
                         t13b.Start();
-                        PlaceDistributionPanel(curDoc, uidoc, panelGroup, insertPoint);
+                        PlaceDistributionPanel(curDoc, uidoc, panelGroup, insertPoint, targetWall);
                         t13b.Commit();
                     }
 
-                    // notify the user that the distribution panel was moved to the Utility Room
                     Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel",
-                        "The data distribution panel was moved to the Utility Room. Verify position and ungroup if needed.");
+                        "The data distribution panel was placed in the Utility Room. Verify the position and ungroup if needed.");
                 }
             }
 
@@ -1416,6 +1442,60 @@ namespace Q2_Revisions
         }
 
         /// <summary>
+        /// method to delete wiring attached to exisitng switch at wet areas.
+        /// </summary>
+        private void DeleteRoomWiringExceptSwitchWire(Document curDoc, View elecView, SpatialElement room, FamilyInstance switchInst)
+        {
+            Room revitRoom = room as Room;
+            if (revitRoom == null) return;
+
+            XYZ switchPt = (switchInst.Location as LocationPoint)?.Point;
+            if (switchPt == null) return;
+
+            // use the room's level elevation for IsPointInRoom checks
+            Level roomLevel = curDoc.GetElement(room.LevelId) as Level;
+            double levelElev = roomLevel?.Elevation ?? 0;
+
+            // find all detail lines with a "Wiring" line style in the electrical view
+            List<CurveElement> roomWiring = new FilteredElementCollector(curDoc, elecView.Id)
+                .OfClass(typeof(CurveElement))
+                .Cast<CurveElement>()
+                .Where(ce =>
+                {
+                    string lsName = ce.LineStyle?.Name ?? string.Empty;
+                    if (lsName.IndexOf("Wiring", StringComparison.OrdinalIgnoreCase) < 0) return false;
+
+                    // check if either endpoint falls inside the room
+                    Curve curve = ce.GeometryCurve;
+                    if (curve == null) return false;
+                    XYZ p0 = new XYZ(curve.GetEndPoint(0).X, curve.GetEndPoint(0).Y, levelElev + 1);
+                    XYZ p1 = new XYZ(curve.GetEndPoint(1).X, curve.GetEndPoint(1).Y, levelElev + 1);
+                    return revitRoom.IsPointInRoom(p0) || revitRoom.IsPointInRoom(p1);
+                })
+                .ToList();
+
+            // find wiring whose endpoint is within 6 inches of the original switch — keep those
+            double tolerance = 0.5;
+            HashSet<ElementId> keepIds = new HashSet<ElementId>(
+                roomWiring
+                    .Where(ce =>
+                    {
+                        Curve curve = ce.GeometryCurve;
+                        return curve.GetEndPoint(0).DistanceTo(switchPt) <= tolerance
+                            || curve.GetEndPoint(1).DistanceTo(switchPt) <= tolerance;
+                    })
+                    .Select(ce => ce.Id));
+
+            // delete all other wiring in the room
+            foreach (CurveElement ce in roomWiring)
+            {
+                if (!keepIds.Contains(ce.Id))
+                    curDoc.Delete(ce.Id);
+            }
+        }
+
+
+        /// <summary>
         /// method to copy a wall-hosted light switch 4" away on the side of the switch
         /// that is opposite the nearest door. uses the wall direction to determine which
         /// side the door is on relative to the switch, then offsets in the opposing direction.
@@ -1559,7 +1639,20 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// returns the facing orientation of the first wall-hosted family instance found in the group.
+        /// returns the Leviton 49605-14P distribution box FamilyInstance, or null if not found.
+        /// </summary>
+        private FamilyInstance GetDistributionBoxDevice(Document curDoc)
+        {
+            return new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_CommunicationDevices)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .FirstOrDefault(fi =>
+                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// returns the facing orientation of the first family instance found in the group.
         /// falls back to XYZ.BasisX if none is found.
         /// </summary>
         private XYZ GetGroupFacingDirection(Document curDoc, Group group)
@@ -1567,7 +1660,7 @@ namespace Q2_Revisions
             foreach (ElementId id in group.GetMemberIds())
             {
                 FamilyInstance fi = curDoc.GetElement(id) as FamilyInstance;
-                if (fi != null && fi.Host is Wall)
+                if (fi != null && fi.FacingOrientation.GetLength() > 0.001)
                     return fi.FacingOrientation;
             }
             return XYZ.BasisX;
@@ -1991,6 +2084,15 @@ namespace Q2_Revisions
                        fi.Symbol.Name.Equals("Ceiling Fan", StringComparison.OrdinalIgnoreCase);
             }
 
+            public bool AllowReference(Reference reference, XYZ position) => false;
+        }
+
+        /// <summary>
+        /// selection filter that restricts element picking to walls only.
+        /// </summary>
+        private class WallSelectionFilter : ISelectionFilter
+        {
+            public bool AllowElement(Element elem) => elem is Wall;
             public bool AllowReference(Reference reference, XYZ position) => false;
         }
 
