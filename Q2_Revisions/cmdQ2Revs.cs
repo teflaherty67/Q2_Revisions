@@ -448,11 +448,65 @@ namespace Q2_Revisions
 
             #region Revision 13: Move data distribution panel to Utility Room
 
+            // determine which level the distribution panel is on
+            View distBoxElecView = GetDistributionBoxElectricalView(curDoc);
 
+            // determine which level the Utility Room is on
+            View utilityElecView = GetUtilityRoomElectricalView(curDoc);
 
+            // switch to the electrical view for the level of the distribution panel
+            if (distBoxElecView != null)
+                uidoc.ActiveView = distBoxElecView;
 
+            // prompt the user to select the distribution panel and all associated elements
+            IList<Reference> panelRefs = null;
+            try
+            {
+                panelRefs = uidoc.Selection.PickObjects(
+                    ObjectType.Element,
+                    "Select the distribution panel and all associated elements, then click Finish.");
+            }
+            catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
 
+            if (panelRefs != null && panelRefs.Count > 0)
+            {
+                // transaction 1: group the selected elements
+                Group panelGroup = null;
+                using (Transaction t13a = new Transaction(curDoc, "Group Distribution Panel"))
+                {
+                    t13a.Start();
+                    panelGroup = GroupDistributionPanel(curDoc, panelRefs.Select(r => r.ElementId).ToList());
+                    t13a.Commit();
+                }
 
+                // switch to the electrical view for the level of the Utility Room
+                if (utilityElecView != null)
+                    uidoc.ActiveView = utilityElecView;
+
+                // prompt the user to select a point on the wall behind the Utility Room door
+                XYZ insertPoint = null;
+                try
+                {
+                    insertPoint = uidoc.Selection.PickPoint(
+                        "Pick a point on the wall behind the Utility Room door for the distribution panel.");
+                }
+                catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
+
+                if (panelGroup != null && insertPoint != null)
+                {
+                    // transaction 2: place the group at the selected point and turn on the detail group
+                    using (Transaction t13b = new Transaction(curDoc, "Place Distribution Panel"))
+                    {
+                        t13b.Start();
+                        PlaceDistributionPanel(curDoc, uidoc, panelGroup, insertPoint);
+                        t13b.Commit();
+                    }
+
+                    // notify the user that the distribution panel was moved to the Utility Room
+                    Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel",
+                        "The data distribution panel was moved to the Utility Room. Verify position and ungroup if needed.");
+                }
+            }
 
             #endregion
 
@@ -483,7 +537,6 @@ namespace Q2_Revisions
 
 
             #endregion
-
 
             #endregion
 
@@ -1420,6 +1473,73 @@ namespace Q2_Revisions
                 StructuralType.NonStructural);
 
             return newSwitch != null ? 1 : 0;
+        }
+
+        /// <summary>
+        /// returns the electrical view for the level where the Leviton 49605-14P distribution box is located.
+        /// returns null if the box or its electrical view cannot be found.
+        /// </summary>
+        private View GetDistributionBoxElectricalView(Document curDoc)
+        {
+            FamilyInstance distBox = new FilteredElementCollector(curDoc)
+                .OfCategory(BuiltInCategory.OST_CommunicationDevices)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .FirstOrDefault(fi =>
+                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase));
+
+            if (distBox == null) return null;
+
+            Level boxLevel = curDoc.GetElement(distBox.LevelId) as Level;
+            return boxLevel == null ? null : GetElectricalViewForLevel(curDoc, boxLevel.Name);
+        }
+
+        /// <summary>
+        /// returns the electrical view for the level that contains a room named "Utility" or "Laundry".
+        /// returns null if no such room or electrical view is found.
+        /// </summary>
+        private View GetUtilityRoomElectricalView(Document curDoc)
+        {
+            SpatialElement utilityRoom = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(SpatialElement))
+                .Cast<SpatialElement>()
+                .FirstOrDefault(r =>
+                {
+                    string name = r.LookupParameter("Name")?.AsString() ?? string.Empty;
+                    return name.IndexOf("Utility", StringComparison.OrdinalIgnoreCase) >= 0
+                        || name.IndexOf("Laundry", StringComparison.OrdinalIgnoreCase) >= 0;
+                });
+
+            if (utilityRoom == null) return null;
+
+            Level utilityLevel = curDoc.GetElement(utilityRoom.LevelId) as Level;
+            return utilityLevel == null ? null : GetElectricalViewForLevel(curDoc, utilityLevel.Name);
+        }
+
+        /// <summary>
+        /// creates a named group from the selected element ids and returns it.
+        /// </summary>
+        private Group GroupDistributionPanel(Document curDoc, List<ElementId> elementIds)
+        {
+            Group panelGroup = curDoc.Create.NewGroup(elementIds);
+            if (panelGroup != null)
+                panelGroup.GroupType.Name = "Data Distribution Panel";
+            return panelGroup;
+        }
+
+        /// <summary>
+        /// moves the distribution panel group to the picked insertion point and turns on the
+        /// associated detail group in the active view.
+        /// </summary>
+        private void PlaceDistributionPanel(Document curDoc, UIDocument uidoc, Group panelGroup, XYZ insertPoint)
+        {
+            // create an instance of the distribution panel group at the selected point
+            XYZ groupOrigin = (panelGroup.Location as LocationPoint)?.Point ?? XYZ.Zero;
+            ElementTransformUtils.MoveElement(curDoc, panelGroup.Id,
+                new XYZ(insertPoint.X - groupOrigin.X, insertPoint.Y - groupOrigin.Y, 0));
+
+            // turn on the associated detail group in the active view
+            panelGroup.ShowAllAttachedDetailGroups(uidoc.ActiveView);
         }
 
         /// <summary>
