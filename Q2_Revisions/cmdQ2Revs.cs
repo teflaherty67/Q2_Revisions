@@ -12,6 +12,7 @@ namespace Q2_Revisions
         private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
+        private const string ViewsFilePath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Template\Views.rvt";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -478,7 +479,8 @@ namespace Q2_Revisions
 
             // notify the user
             Utils.TaskDialogInformation("Q2 Revisions", "Add WH Outlet Note",
-                "WH outlet note added to the First Floor Electrical Plan.");
+                "WH outlet note added to the electrical plan.");
+
 
             #endregion
 
@@ -577,6 +579,7 @@ namespace Q2_Revisions
             Utils.TaskDialogInformation("Q2 Revisions", "Update Detail Legends",
                 $"Water Shut-Off detail was added to {shutOffPlaced} Foundation Plan sheet(s), " +
                 $"and {sidingReplaced + brickReplaced} instance(s) of eave details were updated on the Exterior Elevation sheets.");
+
 
             #endregion
 
@@ -1460,9 +1463,14 @@ namespace Q2_Revisions
             // offset 3' to the right in the view's right direction
             XYZ noteOrigin = lp.Point + electricalView.RightDirection * 3.0;
 
-            TextNote.Create(curDoc, electricalView.Id, noteOrigin,
+            TextNote note = TextNote.Create(curDoc, electricalView.Id, noteOrigin,
                 "110V DED for tankless WH @ 48\" AFF", options);
+
+            // add a leader from the left side of the note pointing to the WH location
+            Leader leader = note.AddLeader(TextNoteLeaderTypes.TNLT_STRAIGHT_L);
+            leader.End = lp.Point;
         }
+
 
         #endregion
 
@@ -1646,9 +1654,12 @@ namespace Q2_Revisions
 
             if (legend == null) return 0;
 
+            // find the "No Title" viewport type
+            ElementId noTitleTypeId = GetNoTitleViewportTypeId(curDoc);
+
             // find all sheets whose name contains "Foundation Plan"
             List<ViewSheet> foundationSheets = Utils.GetAllSheets(curDoc)
-                .Where(s => s.Name.IndexOf("Foundation Plan", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(s => s.Name.IndexOf("Form", StringComparison.OrdinalIgnoreCase) >= 0)
                 .ToList();
 
             if (foundationSheets.Count == 0) return 0;
@@ -1664,19 +1675,17 @@ namespace Q2_Revisions
                 if (alreadyPlaced) continue;
 
                 // place at a default position — user should verify and move as needed
-                Viewport.Create(curDoc, sheet.Id, legend.Id, new XYZ(0.5, 0.5, 0));
+                Viewport vp = Viewport.Create(curDoc, sheet.Id, legend.Id, new XYZ(0.5, 0.5, 0));
+
+                // set viewport type to No Title
+                if (noTitleTypeId != null && vp != null)
+                    vp.ChangeTypeId(noTitleTypeId);
+
                 count++;
             }
 
             return count;
         }
-
-
-
-
-
-
-
 
         /// <summary>
         /// finds Exterior Elevation sheets that have an existing eave detail legend whose name
@@ -1701,6 +1710,9 @@ namespace Q2_Revisions
                 .ToList();
 
             if (exteriorSheets.Count == 0) return 0;
+
+            // find the "No Title" viewport type once for all placements
+            ElementId noTitleTypeId = GetNoTitleViewportTypeId(curDoc);
 
             int count = 0;
             foreach (ViewSheet sheet in exteriorSheets)
@@ -1727,16 +1739,30 @@ namespace Q2_Revisions
                 curDoc.Delete(oldVp.Id);
 
                 // place the new legend at the same position
-                Viewport.Create(curDoc, sheet.Id, newLegend.Id, center);
+                Viewport newVp = Viewport.Create(curDoc, sheet.Id, newLegend.Id, center);
+
+                // set viewport type to No Title
+                if (noTitleTypeId != null && newVp != null)
+                    newVp.ChangeTypeId(noTitleTypeId);
+
                 count++;
             }
 
             return count;
         }
 
-
-
-
+        /// <summary>
+        /// returns the ElementId of the "No Title" viewport type, or null if not found.
+        /// </summary>
+        private ElementId GetNoTitleViewportTypeId(Document curDoc)
+        {
+            return new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ElementType))
+                .Cast<ElementType>()
+                .FirstOrDefault(t => t.FamilyName.Equals("Viewport", StringComparison.OrdinalIgnoreCase)
+                                  && t.Name.Equals("No Title", StringComparison.OrdinalIgnoreCase))
+                ?.Id;
+        }
 
         #endregion
 
