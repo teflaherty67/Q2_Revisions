@@ -1,8 +1,11 @@
 ﻿using Autodesk.Revit.DB.Architecture;
+using System;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using UIFramework.Widget.CustomControls;
+using static Autodesk.Internal.Windows.SwfMediaPlayer;
 
 namespace Q2_Revisions.Common
 {
@@ -2482,7 +2485,6 @@ namespace Q2_Revisions.Common
 
             win.Content = panel;
 
-            // position top-right after the window renders so ActualWidth is known
             win.Loaded += (s, e) =>
             {
                 var screen = System.Windows.SystemParameters.WorkArea;
@@ -2492,7 +2494,6 @@ namespace Q2_Revisions.Common
 
             win.ShowDialog();
         }
-
 
         /// <summary>
         /// Displays an error dialog to the user with custom title and message
