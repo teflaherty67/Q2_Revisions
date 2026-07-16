@@ -627,11 +627,21 @@ namespace Q2_Revisions
             // if the vanity is 60" or longer, load the new vanity cabinet families
             if (mbCounterLength >= 5.0 - 0.001)
             {
-                using (Transaction t16 = new Transaction(curDoc, "Load New Vanity Cabinet Families"))
+                // create a transaction
+                using (Transaction t16 = new Transaction(curDoc, "Load Vanity Cabinet Families"))
                 {
+                    // start the transaction
+                    t16.Start();
+
+                    // call the method to load all vanity cabinet families
                     LoadVanityCabinetFamilies(curDoc);
+
+                    // commit the transaction
+                    t16.Commit();
                 }
-                // notification
+
+                // notify the user that vanity cabinet families were loaded
+                Utils.TaskDialogInformation("Q2 Revisions", "Load Vanity Cabinet Families", "Vanity cabinet families loaded for Master Bath vanity revision.");
             }
 
             #endregion
@@ -1884,8 +1894,8 @@ namespace Q2_Revisions
                 "LD_CW_Vanity_2-Dr_2-Drwr_Flush",
                 "LD_CW_Vanity_3-Drwr_Flush",
                 "LD_CW_Vanity_Sink_2-Dr_Flush",
-                "LD-CW_Vanity_Filler",
-                "LD-CW_Vanity_Filler_Sizes",
+                "LD_CW_Vanity_Filler",
+                "LD_CW_Vanity_Filler_Sizes",
             };
 
             foreach (string familyName in familyNames)
