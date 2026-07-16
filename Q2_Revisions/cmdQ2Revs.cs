@@ -314,8 +314,8 @@ namespace Q2_Revisions
 
             #region Revision 10: Changed WP LED fixtures at wet areas to standard LED
 
-            // create variable for swapped fixture count
-            int wpLedCount = 0;
+            // create variable for swapped fixture rooms
+            List<string> wpLedRooms = new List<string>();
 
             // create a transaction
             using (Transaction t10 = new Transaction(curDoc, "Swap WP LED to LED in Bathrooms"))
@@ -324,16 +324,17 @@ namespace Q2_Revisions
                 t10.Start();
 
                 // call the method to swap WP LED fixtures in bathrooms
-                wpLedCount = SwapWPLEDInBathrooms(curDoc);
+                wpLedRooms = SwapWPLEDInBathrooms(curDoc);
 
                 // commit the transaction
                 t10.Commit();
             }
 
             // create notification message
-            string wpLedMsg = wpLedCount == 0
+            string wpLedMsg = wpLedRooms.Count == 0
                 ? "No WP LED fixtures were found in bathroom rooms."
-                : $"{wpLedCount} WP LED {(wpLedCount == 1 ? "fixture was" : "fixtures were")} swapped to standard LED and {(wpLedCount == 1 ? "its tag was" : "their tags were")} removed.";
+                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} replaced with standard LED fixtures in the following {(wpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
+                  string.Join("\n", wpLedRooms.Select(r => $"• {r}"));
 
             // notify the user of WP LED swap results
             Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures", wpLedMsg);
@@ -1344,13 +1345,13 @@ namespace Q2_Revisions
         /// swap each to LT-No Base / LED, and delete the accompanying Lighting Fixture tag.
         /// Standard LED fixtures are not tagged, so the WP tag is removed without replacement.
         /// </summary>
-        private int SwapWPLEDInBathrooms(Document curDoc)
+        private List<string> SwapWPLEDInBathrooms(Document curDoc)
         {
             // find the standard LED type to swap to
             FamilySymbol ledSymbol = Utils.FindFamilySymbol(curDoc, "LT-No Base", "LED");
 
             // return if the standard LED type is not found
-            if (ledSymbol == null) return 0;
+            if (ledSymbol == null) return new List<string>();
 
             // activate the symbol if it is not already active
             if (!ledSymbol.IsActive) ledSymbol.Activate();
@@ -1376,8 +1377,8 @@ namespace Q2_Revisions
                 .Cast<IndependentTag>()
                 .ToList();
 
-            // track how many fixtures were swapped
-            int count = 0;
+            // track the rooms where fixtures were swapped
+            List<string> swappedRooms = new List<string>();
 
             foreach (FamilyInstance fi in wpFixtures)
             {
@@ -1408,11 +1409,11 @@ namespace Q2_Revisions
                 // swap the fixture type to standard LED
                 fi.ChangeTypeId(ledSymbol.Id);
 
-                count++;
+                swappedRooms.Add(roomName);
             }
 
-            // return the number of fixtures swapped
-            return count;
+            // return the list of rooms where fixtures were swapped
+            return swappedRooms;
         }
 
         /// <summary>
