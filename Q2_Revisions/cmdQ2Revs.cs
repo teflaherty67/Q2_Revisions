@@ -1869,6 +1869,7 @@ namespace Q2_Revisions
             {
                 "LD_CW_Vanity_2-Dr_1-Drwr_Flush",
                 "LD_CW_Vanity_2-Dr_2-Drwr_Flush",
+                "LD_CW_Vanity_3-Drwr_Flush",
             };
 
             foreach (string familyName in familyNames)
