@@ -60,9 +60,13 @@ namespace Q2_Revisions
                 t1.Commit();
             }
 
-            // notify the user shelf update complete
-            Utils.TaskDialogInformation("Q2 Revisions", "Update Shelving",
-               $"{shelfCount} shelf stack(s) were updated to 4 Shelves.");
+            // create notification message
+            string shelvingMsg = shelfCount == 0
+                ? "No shelf stacks were found in the project."
+                : $"{shelfCount} shelf {(shelfCount == 1 ? "stack was" : "stacks were")} updated to 4 shelves.";
+
+            // notify the user of shelving update
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Shelving", shelvingMsg);
 
             #endregion
 
@@ -87,11 +91,11 @@ namespace Q2_Revisions
                     t2.Commit();
                 }
 
-                // create notificaiotn message
+                // create notification message
                 string flooringMsg = updatedRooms.Count == 0
-                   ? "The flooring in all First Floor rooms is already HS."
-                   : $"The flooring was changed in the following {updatedRooms.Count} room(s):\n" +
-                     string.Join("\n", updatedRooms.Select(r => $"• {r}"));
+                    ? "The flooring in all First Floor rooms is already HS."
+                    : $"The flooring was changed in the following {updatedRooms.Count} {(updatedRooms.Count == 1 ? "room" : "rooms")}:\n" +
+                      string.Join("\n", updatedRooms.Select(r => $"• {r}"));
 
                 // notify the user of flooring updates
                 Utils.TaskDialogInformation("Q2 Revisions", "Update Floor Materials", flooringMsg);
@@ -117,12 +121,15 @@ namespace Q2_Revisions
                 t3.Commit();
             }
 
+            // create notification message
+            string clgItemsMsg = dispStairCount == 0
+                ? "No Disp Stair types were found in the --Ceiling Items-- family."
+                : $"The --Ceiling Items-- family was updated to the new LD_GM_Ceiling_Items family. " +
+                  $"{dispStairCount} Disp Stair {(dispStairCount == 1 ? "instance was" : "instances were")} replaced with the new family type.";
+
             // notify the user of ceiling items update
-            Utils.TaskDialogInformation("Q2 Revisions", "Update Ceiling Items",
-                dispStairCount == 0
-                    ? "No Disp Stair types were found in the --Ceiling Items-- family."
-                     : $"The --Ceiling Items-- family was updated to the new LD_GM_Ceiling_Items family." +
-                     $" {dispStairCount} Disp Stair {(dispStairCount == 1 ? "type was" : "types were")} replaced with the new family type.");
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Ceiling Items", clgItemsMsg);
+
 
             #endregion
 
@@ -144,11 +151,13 @@ namespace Q2_Revisions
                 t4.Commit();
             }
 
+            // create notification message
+            string sroMsg = countSRO == 0
+                ? "No SROs were found in the project."
+                : $"{countSRO} SRO{(countSRO == 1 ? " was" : "s were")} removed from the project.";
+
             // notify the user of SRO removal
-            Utils.TaskDialogInformation("Q2 Revisions", "Remove SROs",
-                countSRO == 0
-                    ? "No SROs were found in the project."
-                    : $"{countSRO} SRO{(countSRO == 1 ? " was" : "s were")} removed from the project.");
+            Utils.TaskDialogInformation("Q2 Revisions", "Remove SROs", sroMsg);
 
             #endregion
 
@@ -239,13 +248,14 @@ namespace Q2_Revisions
                 t7.Commit();
             }
 
-            // notify the user of outlet removal with proper grammar
+            // create notification message
             string outletMsg = outletCount == 0
                 ? "No telephone or television jacks were found in the project."
                 : outletCount == 1
                     ? "There was 1 telephone and/or television jack removed from the project."
                     : $"There were {outletCount} telephone and/or television jacks removed from the project.";
 
+            // notify the user of outlet removal
             Utils.TaskDialogInformation("Q2 Revisions", "Remove PH & TV Outlets", outletMsg);
 
             #endregion
@@ -268,11 +278,13 @@ namespace Q2_Revisions
                 t8.Commit();
             }
 
-            // notify the user of WH-Tstat removal with proper grammar
-            Utils.TaskDialogInformation("Q2 Revisions", "Remove WH-Tstat",
-                whTstatCount == 0
-                    ? "No WH-Tstat instances were found in the project."
-                    : $"{whTstatCount} WH-Tstat {(whTstatCount == 1 ? "instance was" : "instances were")} removed from the project.");
+            // create notification message
+            string whTstatMsg = whTstatCount == 0
+                ? "No WH-Tstat instances were found in the project."
+                : $"{whTstatCount} WH-Tstat {(whTstatCount == 1 ? "instance was" : "instances were")} removed from the project.";
+
+            // notify the user of WH-Tstat removal
+            Utils.TaskDialogInformation("Q2 Revisions", "Remove WH-Tstat", whTstatMsg);
 
             #endregion
 
@@ -299,8 +311,8 @@ namespace Q2_Revisions
 
             #region Revision 10: Changed WP LED fixtures at wet areas to standard LED
 
-            // create variable for swapped fixture count
-            int wpLedCount = 0;
+            // create variable for swapped fixture rooms
+            List<string> wpLedRooms = new List<string>();
 
             // create a transaction
             using (Transaction t10 = new Transaction(curDoc, "Swap WP LED to LED in Bathrooms"))
@@ -309,17 +321,21 @@ namespace Q2_Revisions
                 t10.Start();
 
                 // call the method to swap WP LED fixtures in bathrooms
-                wpLedCount = SwapWPLEDInBathrooms(curDoc);
+                wpLedRooms = SwapWPLEDInBathrooms(curDoc);
 
                 // commit the transaction
                 t10.Commit();
             }
 
+            // create notification message
+            string wpLedMsg = wpLedRooms.Count == 0
+                ? "No WP LED fixtures were found in bathroom rooms."
+                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} " +
+                $"replaced with standard LED fixtures in the following {(wpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
+                  string.Join("\n", wpLedRooms.Select(r => $"• {r}"));
+
             // notify the user of WP LED swap results
-            Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures",
-                wpLedCount == 0
-                    ? "No WP LED fixtures were found in bathroom rooms."
-                    : $"{wpLedCount} WP LED {(wpLedCount == 1 ? "fixture was" : "fixtures were")} swapped to standard LED and {(wpLedCount == 1 ? "its tag was" : "their tags were")} removed.");
+            Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures", wpLedMsg);
 
             #endregion
 
@@ -562,7 +578,7 @@ namespace Q2_Revisions
 
             // notify the user
             Utils.TaskDialogInformation("Q2 Revisions", "Add WH Outlet Note",
-                "WH outlet note added to the electrical plan.");
+                "WH outlet note was added to the First Floor Electrical Plan.");
 
 
             #endregion
@@ -718,7 +734,7 @@ namespace Q2_Revisions
         #region Floor Plan Revisions Methods
 
         /// <summary>
-        /// method to set active view to the First Floor Plan Annotation view, if it exists.
+        /// method to set active view to the First Floor Plan annotation view, if it exists.
         /// </summary>
         private View GetFirstFloorAnnotationView(Document curDoc)
         {
@@ -868,7 +884,7 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// method to update Ceiliing Items family in the current document
+        /// method to update --Ceiliing Items-- family in the current document
         /// to the show current version of the "Disp Stairs" family type.
         /// returns number of instances updated
         /// </summary>
@@ -974,7 +990,8 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// method to remove all SROs from the current document
+        /// method to remove all SROs from the current document.
+        /// returns number of SROs removed.
         /// </summary>
         private int RemoveSROs(Document curDoc)
         {
@@ -1306,13 +1323,13 @@ namespace Q2_Revisions
         /// swap each to LT-No Base / LED, and delete the accompanying Lighting Fixture tag.
         /// Standard LED fixtures are not tagged, so the WP tag is removed without replacement.
         /// </summary>
-        private int SwapWPLEDInBathrooms(Document curDoc)
+        private List<string> SwapWPLEDInBathrooms(Document curDoc)
         {
             // find the standard LED type to swap to
             FamilySymbol ledSymbol = Utils.FindFamilySymbol(curDoc, "LT-No Base", "LED");
 
             // return if the standard LED type is not found
-            if (ledSymbol == null) return 0;
+            if (ledSymbol == null) return new List<string>();
 
             // activate the symbol if it is not already active
             if (!ledSymbol.IsActive) ledSymbol.Activate();
@@ -1338,8 +1355,8 @@ namespace Q2_Revisions
                 .Cast<IndependentTag>()
                 .ToList();
 
-            // track how many fixtures were swapped
-            int count = 0;
+            // track the rooms where fixtures were swapped
+            List<string> swappedRooms = new List<string>();
 
             foreach (FamilyInstance fi in wpFixtures)
             {
@@ -1370,12 +1387,13 @@ namespace Q2_Revisions
                 // swap the fixture type to standard LED
                 fi.ChangeTypeId(ledSymbol.Id);
 
-                count++;
+                swappedRooms.Add(roomName);
             }
 
-            // return the number of fixtures swapped
-            return count;
+            // return the list of rooms where fixtures were swapped
+            return swappedRooms;
         }
+
 
         /// <summary>
         /// method to place 6 LT-No Base / LED fixtures around the selected ceiling fan.
