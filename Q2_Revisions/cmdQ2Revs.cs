@@ -1508,22 +1508,24 @@ namespace Q2_Revisions
                 })
                 .ToList();
 
-            // keep wiring whose endpoint is within 1' of the switch insertion point;
-            // the switch symbol is a fixed size so the wire endpoint is always ~8.5" away
-            HashSet<ElementId> keepIds = new HashSet<ElementId>(
-                roomWiring
-                    .Where(ce =>
-                    {
-                        Curve curve = ce.GeometryCurve;
-                        return curve.GetEndPoint(0).DistanceTo(switchPt) <= 1.0
-                            || curve.GetEndPoint(1).DistanceTo(switchPt) <= 1.0;
-                    })
-                    .Select(ce => ce.Id));
+            // keep the single wire whose nearest endpoint is closest to the switch insertion point;
+            // this works regardless of switch orientation or exact gap distance
+            if (roomWiring.Count == 0) return;
+
+            CurveElement switchWire = roomWiring
+                .OrderBy(ce =>
+                {
+                    Curve curve = ce.GeometryCurve;
+                    return Math.Min(
+                        curve.GetEndPoint(0).DistanceTo(switchPt),
+                        curve.GetEndPoint(1).DistanceTo(switchPt));
+                })
+                .First();
 
             // delete all other wiring in the room
             foreach (CurveElement ce in roomWiring)
             {
-                if (!keepIds.Contains(ce.Id))
+                if (ce.Id != switchWire.Id)
                     curDoc.Delete(ce.Id);
             }
         }
