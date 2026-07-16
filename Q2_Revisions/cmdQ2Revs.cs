@@ -61,10 +61,10 @@ namespace Q2_Revisions
             }
 
             // notify the user shelf update complete
-            Utils.TaskDialogInformation("Q2 Revisions", "Update Shelving",
-                shelfCount == 0
-                    ? "No shelf stacks were found in the project."
-                    : $"{shelfCount} shelf {(shelfCount == 1 ? "stack was" : "stacks were")} updated to 4 shelves.");
+            string shelvingMsg = shelfCount == 0
+                ? "No shelf stacks were found in the project."
+                : $"{shelfCount} shelf {(shelfCount == 1 ? "stack was" : "stacks were")} updated to 4 shelves.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Shelving", shelvingMsg);
 
             #endregion
 
@@ -120,11 +120,11 @@ namespace Q2_Revisions
             }
 
             // notify the user of ceiling items update
-            Utils.TaskDialogInformation("Q2 Revisions", "Update Ceiling Items",
-                dispStairCount == 0
-                    ? "No Disp Stair types were found in the --Ceiling Items-- family."
-                     : $"The --Ceiling Items-- family was updated to the new LD_GM_Ceiling_Items family." +
-                     $" {dispStairCount} Disp Stair {(dispStairCount == 1 ? "type was" : "types were")} replaced with the new family type.");
+            string clgItemsMsg = dispStairCount == 0
+                ? "No Disp Stair types were found in the --Ceiling Items-- family."
+                : $"The --Ceiling Items-- family was updated to the new LD_GM_Ceiling_Items family. " +
+                  $"{dispStairCount} Disp Stair {(dispStairCount == 1 ? "type was" : "types were")} replaced with the new family type.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Ceiling Items", clgItemsMsg);
 
             #endregion
 
@@ -147,10 +147,10 @@ namespace Q2_Revisions
             }
 
             // notify the user of SRO removal
-            Utils.TaskDialogInformation("Q2 Revisions", "Remove SROs",
-                countSRO == 0
-                    ? "No SROs were found in the project."
-                    : $"{countSRO} SRO{(countSRO == 1 ? " was" : "s were")} removed from the project.");
+            string sroMsg = countSRO == 0
+                ? "No SROs were found in the project."
+                : $"{countSRO} SRO{(countSRO == 1 ? " was" : "s were")} removed from the project.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Remove SROs", sroMsg);
 
             #endregion
 
@@ -209,8 +209,8 @@ namespace Q2_Revisions
                     uidoc.ActiveView = doorSchedule;
 
                 // build and show the notification message
-                Utils.TaskDialogInformation("Q2 Revisions", "Update Exterior Entry Doors",
-                    "The front and rear door families were updated, and types set per the selected spec level.");
+                string doorMsg = "The front and rear door families were updated, and types set per the selected spec level.";
+                Utils.TaskDialogInformation("Q2 Revisions", "Update Exterior Entry Doors", doorMsg);
             }
 
 
@@ -271,10 +271,10 @@ namespace Q2_Revisions
             }
 
             // notify the user of WH-Tstat removal with proper grammar
-            Utils.TaskDialogInformation("Q2 Revisions", "Remove WH-Tstat",
-                whTstatCount == 0
-                    ? "No WH-Tstat instances were found in the project."
-                    : $"{whTstatCount} WH-Tstat {(whTstatCount == 1 ? "instance was" : "instances were")} removed from the project.");
+            string whTstatMsg = whTstatCount == 0
+                ? "No WH-Tstat instances were found in the project."
+                : $"{whTstatCount} WH-Tstat {(whTstatCount == 1 ? "instance was" : "instances were")} removed from the project.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Remove WH-Tstat", whTstatMsg);
 
             #endregion
 
@@ -294,8 +294,8 @@ namespace Q2_Revisions
             }
 
             // notify the user of the type rename
-            Utils.TaskDialogInformation("Q2 Revisions", "Rename Dual Data Type",
-                "The EL-Wall Base type 'Outlet-Dual Cat5e-Cat6' was renamed to 'Outlet-Dual Cat6' and Type Comments set to 'Dual Cat6'.");
+            string dualDataMsg = "The EL-Wall Base type 'Outlet-Dual Cat5e-Cat6' was renamed to 'Outlet-Dual Cat6' and Type Comments set to 'Dual Cat6'.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Rename Dual Data Type", dualDataMsg);
 
             #endregion
 
@@ -318,16 +318,16 @@ namespace Q2_Revisions
             }
 
             // notify the user of WP LED swap results
-            Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures",
-                wpLedCount == 0
-                    ? "No WP LED fixtures were found in bathroom rooms."
-                    : $"{wpLedCount} WP LED {(wpLedCount == 1 ? "fixture was" : "fixtures were")} swapped to standard LED and {(wpLedCount == 1 ? "its tag was" : "their tags were")} removed.");
+            string wpLedMsg = wpLedCount == 0
+                ? "No WP LED fixtures were found in bathroom rooms."
+                : $"{wpLedCount} WP LED {(wpLedCount == 1 ? "fixture was" : "fixtures were")} swapped to standard LED and {(wpLedCount == 1 ? "its tag was" : "their tags were")} removed.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures", wpLedMsg);
 
             #endregion
 
             // notify the user to watch the status bar in the lower-left corner for the next 3 revisions
-            Utils.TaskDialogInformation("Q2 Revisions", "User Input Required",
-                "The next 3 revisions require user input. Please follow the prompts in the lower-left corner of the Revit window.");
+            string userInputMsg = "The next 3 revisions require user input. Please follow the prompts in the lower-left corner of the Revit window.";
+            Utils.TaskDialogInformation("Q2 Revisions", "User Input Required", userInputMsg);
 
             #region Revision 11: Add 6 LED fixtures at Family/Living
 
@@ -366,8 +366,8 @@ namespace Q2_Revisions
                 }
 
                 // notify the user that LED fixtures were placed
-                Utils.TaskDialogInformation("Q2 Revisions", "Add LED Fixtures",
-                    "6 LED fixtures were added around the selected ceiling fan.");
+                string ledMsg = "6 LED fixtures were added around the selected ceiling fan.";
+                Utils.TaskDialogInformation("Q2 Revisions", "Add LED Fixtures", ledMsg);
             }
 
             #endregion
@@ -453,8 +453,8 @@ namespace Q2_Revisions
                 }
             }
 
-            Utils.TaskDialogInformation("Q2 Revisions", "Separate Switches",
-                $"{switchCopyCount} {(switchCopyCount == 1 ? "switch was" : "switches were")} duplicated to separate lights and exhaust fans at wet areas. Verify placement and update circuits as needed.");
+            string switchMsg = $"{switchCopyCount} {(switchCopyCount == 1 ? "switch was" : "switches were")} duplicated to separate lights and exhaust fans at wet areas. Verify placement and update circuits as needed.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Separate Switches", switchMsg);
 
 
             #endregion
@@ -534,8 +534,8 @@ namespace Q2_Revisions
                         t13b.Commit();
                     }
 
-                    Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel",
-                        "The data distribution panel was placed in the Utility Room. Verify the position and ungroup if needed.");
+                    string panelMsg = "The data distribution panel was placed in the Utility Room. Verify the position and ungroup if needed.";
+                    Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel", panelMsg);
                 }
             }
 
@@ -563,8 +563,8 @@ namespace Q2_Revisions
             }
 
             // notify the user
-            Utils.TaskDialogInformation("Q2 Revisions", "Add WH Outlet Note",
-                "WH outlet note added to the electrical plan.");
+            string whNoteMsg = "WH outlet note added to the electrical plan.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Add WH Outlet Note", whNoteMsg);
 
 
             #endregion
@@ -598,9 +598,9 @@ namespace Q2_Revisions
             }
 
             // notify the user of vanity height update results
-            Utils.TaskDialogInformation("Q2 Revisions", "Update Vanity Heights",
-                $"{vanityCounterCount} vanity {(vanityCounterCount == 1 ? "counter was" : "counters were")} updated to 3'-0\" " +
-                $"and {vanityCabinetCount} vanity {(vanityCabinetCount == 1 ? "cabinet was" : "cabinets were")} updated to 2'-10½\".");
+            string vanityMsg = $"{vanityCounterCount} vanity {(vanityCounterCount == 1 ? "counter was" : "counters were")} updated to 3'-0\" " +
+                $"and {vanityCabinetCount} vanity {(vanityCabinetCount == 1 ? "cabinet was" : "cabinets were")} updated to 2'-10½\".";
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Vanity Heights", vanityMsg);
 
             #endregion
 
@@ -618,10 +618,10 @@ namespace Q2_Revisions
             // pre-step: open Views.rvt in the background and copy the 3 detail legends
             int legendsCopied = CopyDetailLegends(curDoc, uiapp.Application);
 
-            Utils.TaskDialogInformation("Q2 Revisions", "Load Detail Legends",
-                legendsCopied == 0
-                    ? "No detail legends were copied. They may already exist in the project or Views.rvt could not be opened."
-                    : $"{legendsCopied} detail legend(s) were loaded into the project.");
+            string legendsMsg = legendsCopied == 0
+                ? "No detail legends were copied. They may already exist in the project or Views.rvt could not be opened."
+                : $"{legendsCopied} detail {(legendsCopied == 1 ? "legend was" : "legends were")} loaded into the project.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Load Detail Legends", legendsMsg);
 
             #region Revision 17: Place Water Shut-Off Legend on Foundation Plan Sheets
 
@@ -660,9 +660,9 @@ namespace Q2_Revisions
             #endregion
 
             // single notification covering all three legend revisions
-            Utils.TaskDialogInformation("Q2 Revisions", "Update Detail Legends",
-                $"Water Shut-Off detail was added to {shutOffPlaced} Foundation Plan sheet(s), " +
-                $"and {sidingReplaced + brickReplaced} instance(s) of eave details were updated on the Exterior Elevation sheets.");
+            string detailLegendsMsg = $"Water Shut-Off detail was added to {shutOffPlaced} {(shutOffPlaced == 1 ? "Foundation Plan sheet" : "Foundation Plan sheets")}, " +
+                $"and {sidingReplaced + brickReplaced} {(sidingReplaced + brickReplaced == 1 ? "eave detail was" : "eave details were")} updated on the Exterior Elevation sheets.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Detail Legends", detailLegendsMsg);
 
 
             #endregion
@@ -705,8 +705,8 @@ namespace Q2_Revisions
             #endregion
 
             // notify the user of results
-            Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete",
-                $"Q2 Revisions completed. Refer to {planName}.txt file for revisions to complete manually.");
+            string completionMsg = $"Q2 Revisions completed. Refer to {planName}.txt file for revisions to complete manually.";
+            Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete", completionMsg);
 
             // launch the .txt file automatically after the user closes the dialog
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(txtFilePath)
