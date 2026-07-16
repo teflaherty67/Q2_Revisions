@@ -1871,6 +1871,8 @@ namespace Q2_Revisions
                 "LD_CW_Vanity_2-Dr_2-Drwr_Flush",
                 "LD_CW_Vanity_3-Drwr_Flush",
                 "LD_CW_Vanity_Sink_2-Dr_Flush",
+                "LD-CW_Vanity_Filler",
+                "LD-CW_Vanity_Filler_Sizes",
             };
 
             foreach (string familyName in familyNames)
