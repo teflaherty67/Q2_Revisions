@@ -626,8 +626,7 @@ namespace Q2_Revisions
             }
 
             // create notification message
-            string vanityMsg = $"{vanityCounterCount} vanity {(vanityCounterCount == 1 ? "counter was" : "counters were")} updated to 3'-0\" " +
-                $"and {vanityCabinetCount} vanity {(vanityCabinetCount == 1 ? "cabinet was" : "cabinets were")} updated to 2'-10½\".";
+            string vanityMsg = "Vanity cabinets and counters were raised to 3'-0\" AFF.";
 
             // notify the user of vanity height update results
             Utils.TaskDialogInformation("Q2 Revisions", "Update Vanity Heights", vanityMsg);
