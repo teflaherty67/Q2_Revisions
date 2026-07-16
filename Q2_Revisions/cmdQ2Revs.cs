@@ -333,7 +333,7 @@ namespace Q2_Revisions
             // create notification message
             string wpLedMsg = wpLedRooms.Count == 0
                 ? "No WP LED fixtures were found in bathroom rooms."
-                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} replaced with standard LED fixtures in the following {(wpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
+                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} replaced with standard LED {(wpLedRooms.Count == 1 ? "fixture" : "fixtures")} in the following {(wpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
                   string.Join("\n", wpLedRooms.Select(r => $"• {r}"));
 
             // notify the user of WP LED swap results
