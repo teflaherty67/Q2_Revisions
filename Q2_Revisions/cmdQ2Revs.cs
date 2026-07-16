@@ -62,7 +62,9 @@ namespace Q2_Revisions
 
             // notify the user shelf update complete
             Utils.TaskDialogInformation("Q2 Revisions", "Update Shelving",
-               $"{shelfCount} shelf stack(s) were updated to 4 Shelves.");
+                shelfCount == 0
+                    ? "No shelf stacks were found in the project."
+                    : $"{shelfCount} shelf {(shelfCount == 1 ? "stack was" : "stacks were")} updated to 4 shelves.");
 
             #endregion
 
@@ -89,9 +91,9 @@ namespace Q2_Revisions
 
                 // create notificaiotn message
                 string flooringMsg = updatedRooms.Count == 0
-                   ? "The flooring in all First Floor rooms is already HS."
-                   : $"The flooring was changed in the following {updatedRooms.Count} room(s):\n" +
-                     string.Join("\n", updatedRooms.Select(r => $"• {r}"));
+                    ? "The flooring in all First Floor rooms is already HS."
+                    : $"The flooring was changed in the following {updatedRooms.Count} {(updatedRooms.Count == 1 ? "room" : "rooms")}:\n" +
+                      string.Join("\n", updatedRooms.Select(r => $"• {r}"));
 
                 // notify the user of flooring updates
                 Utils.TaskDialogInformation("Q2 Revisions", "Update Floor Materials", flooringMsg);
