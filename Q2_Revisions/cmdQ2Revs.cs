@@ -608,10 +608,6 @@ namespace Q2_Revisions
             if (interiorSheet != null)
                 uidoc.ActiveView = interiorSheet;
 
-            // create variables for updated element counts
-            int vanityCounterCount = 0;
-            int vanityCabinetCount = 0;
-
             // create a transaction
             using (Transaction t14 = new Transaction(curDoc, "Update Vanity Heights"))
             {
@@ -619,7 +615,7 @@ namespace Q2_Revisions
                 t14.Start();
 
                 // call the method to update vanity counter and cabinet heights
-                UpdateVanityHeights(curDoc, out vanityCounterCount, out vanityCabinetCount);
+                UpdateVanityHeights(curDoc);
 
                 // commit the transaction
                 t14.Commit();
@@ -1806,12 +1802,8 @@ namespace Q2_Revisions
         /// method to update the Counter Height on all --Vanity Counter-- instances to 3'-0"
         /// and the Cabinet Height on all families containing "Vanity Cabinet" to 2'-10½".
         /// </summary>
-        private void UpdateVanityHeights(Document curDoc, out int counterCount, out int cabinetCount)
+        private void UpdateVanityHeights(Document curDoc)
         {
-            // initialize counts
-            counterCount = 0;
-            cabinetCount = 0;
-
             // collect all family instances project-wide
             List<FamilyInstance> allInstances = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
@@ -1828,10 +1820,7 @@ namespace Q2_Revisions
                 {
                     Parameter counterHeight = fi.LookupParameter("Counter Height");
                     if (counterHeight != null && !counterHeight.IsReadOnly)
-                    {
                         counterHeight.Set(3.0);
-                        counterCount++;
-                    }
                 }
 
                 // check for any family containing "Vanity Cabinet" and update Cabinet Height to 2'-10½"
@@ -1839,11 +1828,7 @@ namespace Q2_Revisions
                 {
                     Parameter cabinetHeight = fi.LookupParameter("Cabinet Height");
                     if (cabinetHeight != null && !cabinetHeight.IsReadOnly)
-                    {
-                        // 2'-10½" = 2 + 10.5/12 feet
                         cabinetHeight.Set(2.0 + 10.5 / 12.0);
-                        cabinetCount++;
-                    }
                 }
             }
         }
