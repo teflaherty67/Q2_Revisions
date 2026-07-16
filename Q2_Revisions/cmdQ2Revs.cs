@@ -12,6 +12,7 @@ namespace Q2_Revisions
         private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
+        private const string VanityCabinetPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
         private const string ViewsFilePath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Template\Views.rvt";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -125,7 +126,7 @@ namespace Q2_Revisions
             string clgItemsMsg = dispStairCount == 0
                 ? "No Disp Stair types were found in the --Ceiling Items-- family."
                 : $"The --Ceiling Items-- family was updated to the new LD_GM_Ceiling_Items family. " +
-                  $"{dispStairCount} Disp Stair {(dispStairCount == 1 ? "instance was" : "instances were")} replaced with the new family type.";
+                  $"{dispStairCount} Disp Stair {(dispStairCount == 1 ? "type was" : "types were")} replaced with the new family type.";
 
             // notify the user of ceiling items update
             Utils.TaskDialogInformation("Q2 Revisions", "Update Ceiling Items", clgItemsMsg);
@@ -328,11 +329,13 @@ namespace Q2_Revisions
             }
 
             // create notification message
+            List<string> uniqueWpLedRooms = wpLedRooms.Distinct().ToList();
             string wpLedMsg = wpLedRooms.Count == 0
                 ? "No WP LED fixtures were found in bathroom rooms."
-                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} " +
-                $"replaced with standard LED fixtures in the following {(wpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
-                  string.Join("\n", wpLedRooms.Select(r => $"• {r}"));
+                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} replaced with" +
+                $" {(wpLedRooms.Count == 1 ? "a standard" : "standard")} LED {(wpLedRooms.Count == 1 ? "fixture" : "fixtures")}" +
+                $" in the following {(uniqueWpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
+                  string.Join("\n", uniqueWpLedRooms.Select(r => $"• {r}"));
 
             // notify the user of WP LED swap results
             Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures", wpLedMsg);
@@ -469,7 +472,7 @@ namespace Q2_Revisions
 
             // create notification message
             string switchMsg = $"{switchCopyCount} {(switchCopyCount == 1 ? "switch was" : "switches were")} duplicated" +
-                $"so lights and exhaust fans can be switched separately at wet areas. Verify placement and update circuits as needed.";
+                $" so lights and exhaust fans can be switched separately at wet areas. Verify placement and update wiring as needed.";
 
             // notify the user of switch duplication results
             Utils.TaskDialogInformation("Q2 Revisions", "Separate Switches", switchMsg);
@@ -553,7 +556,7 @@ namespace Q2_Revisions
 
                     Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel",
                         "The data distribution panel was moved to the wall behind the Utility/Laundry" +
-                        "room door. Verify the position and ungroup if needed.");
+                        " room door. Verify the position and ungroup if needed.");
                 }
             }
 
@@ -613,13 +616,23 @@ namespace Q2_Revisions
             // notify the user
             Utils.TaskDialogInformation("Q2 Revisions", "Update Vanity Heights",
                 "Vanity cabinets and counters were raised to 3'-0\" AFF.");
-            
+
             #endregion
 
             #region Revision 16: Check Master Bath Vanity Length
 
             // check the master bath vanity counter length and build conditional checklist line
             double mbCounterLength = GetMasterBathVanityCounterLength(curDoc);
+
+            // if the vanity is 60" or longer, load the new vanity cabinet families
+            if (mbCounterLength >= 5.0 - 0.001)
+            {
+                using (Transaction t16 = new Transaction(curDoc, "Load New Vanity Cabinet Families"))
+                {
+                    LoadVanityCabinetFamilies(curDoc);
+                }
+                // notification
+            }
 
             #endregion
 
@@ -1516,22 +1529,24 @@ namespace Q2_Revisions
                 })
                 .ToList();
 
-            // keep wiring whose endpoint is within 1' of the switch insertion point;
-            // the switch symbol is a fixed size so the wire endpoint is always ~8.5" away
-            HashSet<ElementId> keepIds = new HashSet<ElementId>(
-                roomWiring
-                    .Where(ce =>
-                    {
-                        Curve curve = ce.GeometryCurve;
-                        return curve.GetEndPoint(0).DistanceTo(switchPt) <= 1.0
-                            || curve.GetEndPoint(1).DistanceTo(switchPt) <= 1.0;
-                    })
-                    .Select(ce => ce.Id));
+            // keep the single wire whose nearest endpoint is closest to the switch insertion point;
+            // this works regardless of switch orientation or exact gap distance
+            if (roomWiring.Count == 0) return;
+
+            CurveElement switchWire = roomWiring
+                .OrderBy(ce =>
+                {
+                    Curve curve = ce.GeometryCurve;
+                    return Math.Min(
+                        curve.GetEndPoint(0).DistanceTo(switchPt),
+                        curve.GetEndPoint(1).DistanceTo(switchPt));
+                })
+                .First();
 
             // delete all other wiring in the room
             foreach (CurveElement ce in roomWiring)
             {
-                if (!keepIds.Contains(ce.Id))
+                if (ce.Id != switchWire.Id)
                     curDoc.Delete(ce.Id);
             }
         }
@@ -1858,10 +1873,29 @@ namespace Q2_Revisions
             return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
         }
 
+        /// <summary>
+        /// loads all vanity cabinet families from the Bath casework library folder into the project.
+        /// </summary>
+        private void LoadVanityCabinetFamilies(Document curDoc)
+        {
+            List<string> familyNames = new List<string>
+            {
+                "LD_CW_Vanity_2-Dr_1-Drwr_Flush",
+                "LD_CW_Vanity_2-Dr_2-Drwr_Flush",
+                "LD_CW_Vanity_3-Drwr_Flush",
+                "LD_CW_Vanity_Sink_2-Dr_Flush",
+                "LD-CW_Vanity_Filler",
+                "LD-CW_Vanity_Filler_Sizes",
+            };
+
+            foreach (string familyName in familyNames)
+                Utils.LoadFamilyFromLibrary(curDoc, VanityCabinetPath, familyName);
+        }
+
         #endregion
 
         #region Detail Items Revisions Methods
-        
+
         /// <summary>
         /// opens Views.rvt in the background, copies the 3 detail legends into curDoc
         /// (skipping any that already exist), then closes the source document.
