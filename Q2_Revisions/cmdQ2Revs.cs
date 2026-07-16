@@ -331,10 +331,11 @@ namespace Q2_Revisions
             }
 
             // create notification message
+            List<string> uniqueWpLedRooms = wpLedRooms.Distinct().ToList();
             string wpLedMsg = wpLedRooms.Count == 0
                 ? "No WP LED fixtures were found in bathroom rooms."
-                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} replaced with {(wpLedRooms.Count == 1 ? "a standard" : "standard")} LED {(wpLedRooms.Count == 1 ? "fixture" : "fixtures")} in the following {(wpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
-                  string.Join("\n", wpLedRooms.Select(r => $"• {r}"));
+                : $"{wpLedRooms.Count} WP LED {(wpLedRooms.Count == 1 ? "fixture was" : "fixtures were")} replaced with {(wpLedRooms.Count == 1 ? "a standard" : "standard")} LED {(wpLedRooms.Count == 1 ? "fixture" : "fixtures")} in the following {(uniqueWpLedRooms.Count == 1 ? "room" : "rooms")}:\n" +
+                  string.Join("\n", uniqueWpLedRooms.Select(r => $"• {r}"));
 
             // notify the user of WP LED swap results
             Utils.TaskDialogInformation("Q2 Revisions", "Swap WP LED Fixtures", wpLedMsg);
