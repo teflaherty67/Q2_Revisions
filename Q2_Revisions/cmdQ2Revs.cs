@@ -12,6 +12,7 @@ namespace Q2_Revisions
         private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
         private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
+        private const string VanityCabinetPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
         private const string ViewsFilePath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Template\Views.rvt";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -634,6 +635,29 @@ namespace Q2_Revisions
 
             // check the master bath vanity counter length and build conditional checklist line
             double mbCounterLength = GetMasterBathVanityCounterLength(curDoc);
+
+            // if the vanity is 60" or longer, load the new vanity cabinet families
+            if (mbCounterLength >= 5.0 - 0.001)
+            {
+                // create a transaction
+                using (Transaction t16 = new Transaction(curDoc, "Load Vanity Cabinet Families"))
+                {
+                    // start the transaction
+                    t16.Start();
+
+                    // call the method to load all vanity cabinet families
+                    LoadVanityCabinetFamilies(curDoc);
+
+                    // commit the transaction
+                    t16.Commit();
+                }
+
+                // create notification message
+                string vanityCabMsg = "The Master Bath vanity is 60\" or longer. New vanity cabinet families were loaded into the project.";
+
+                // notify the user that vanity cabinet families were loaded
+                Utils.TaskDialogInformation("Q2 Revisions", "Load Vanity Cabinet Families", vanityCabMsg);
+            }
 
             #endregion
 
@@ -1834,6 +1858,31 @@ namespace Q2_Revisions
                         cabinetHeight.Set(2.0 + 10.5 / 12.0);
                 }
             }
+        }
+
+        /// <summary>
+        /// loads all vanity cabinet families from the Bath casework library folder into the project.
+        /// </summary>
+        private void LoadVanityCabinetFamilies(Document curDoc)
+        {
+            List<string> familyNames = new List<string>
+            {
+                "LD_CW_Vanity_2-Dr_1-Drwr_Flush",
+                "LD_CW_Vanity_2-Dr_2-Drwr_Flush",
+                "LD_CW_Vanity_2-Dr_Full Height_Flush",
+                "LD_CW_Vanity_2-Dr_Full Height_Flush_Butt",
+                "LD_CW_Vanity_3-Drwr_Flush",
+                "LD_CW_Vanity_3-Drwr_Recess",
+                "LD_CW_Vanity_4-Drwr_EQ_Flush",
+                "LD_CW_Vanity_4-Drwr_Flush",
+                "LD_CW_Vanity_4-Drwr_Recess",
+                "LD_CW_Vanity_Sink_2-Dr_Flush",
+                "LD_CW_Vanity_Sink_4-Dr_Flush",
+                "LD-CW_Vanity_Filler",
+            };
+
+            foreach (string familyName in familyNames)
+                Utils.LoadFamilyFromLibrary(curDoc, VanityCabinetPath, familyName);
         }
 
         /// <summary>
