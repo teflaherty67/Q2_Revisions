@@ -5,8 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Q2_Revisions"
         mc:Ignorable="d"
-        Title="Q2 Revisions - Spec Level"  Height="240" Width="320"
-        MinWidth="320" MinHeight="240"
+        Title="Q2 Revisions - Spec Level"  Height="230" Width="250"
+        MinWidth="240" MinHeight="220"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
         WindowStyle="None"
@@ -115,7 +115,7 @@
                         <RowDefinition Height="35"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="Select spec level:"
+                    <TextBlock Grid.Row="0" Text="Select Spec Level:"
                                FontSize="11" FontWeight="SemiBold"
                                VerticalAlignment="Center"/>
                     <RadioButton x:Name="rbCompleteHome" Grid.Row="1"

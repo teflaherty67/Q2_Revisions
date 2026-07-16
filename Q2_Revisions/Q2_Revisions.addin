@@ -1,29 +1,20 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
   <AddIn Type="Command">
-    <Text>Q2_Revisions - Command 1</Text>
+    <Text>Q2 Revisions</Text>
     <Description>Some description</Description>
     <Assembly>Q2_Revisions\Q2_Revisions.dll</Assembly>
     <FullClassName>Q2_Revisions.cmdQ2Revs</FullClassName>
     <ClientId>7de932ff-7f03-4d1b-b6fd-cf64de52b55c</ClientId>
-    <VendorId>com.YOUR COMPANY NAME</VendorId>
-    <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
-  </AddIn>
-  <AddIn Type="Command">
-    <Text>Q2_Revisions - Command 2</Text>
-    <Description>Some description</Description>
-    <Assembly>Q2_Revisions\Q2_Revisions.dll</Assembly>
-    <FullClassName>Q2_Revisions.Command2</FullClassName>
-    <ClientId>3d202219-e30f-4572-a893-7a2c8aa5e987</ClientId>
-    <VendorId>com.YOUR COMPANY NAME</VendorId>
-    <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
-  </AddIn>
+    <VendorId>RBA, Inc.</VendorId>
+    <VendorDescription>Lifestyle USA Design, www.lusad.com</VendorDescription>
+  </AddIn>  
   <AddIn Type="Application">
     <Name>Q2_Revisions</Name>
     <Assembly>Q2_Revisions\Q2_Revisions.dll</Assembly>
     <FullClassName>Q2_Revisions.App</FullClassName>
     <ClientId>b42dafa3-0cc2-4e1a-8486-e8a8f4dfe056</ClientId>
-    <VendorId>com.YOUR COMPANY NAME</VendorId>
-    <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
+    <VendorId>RBA, Inc.</VendorId>
+    <VendorDescription>Lifestyle USA Design, www.lusad.com</VendorDescription>
   </AddIn>
 </RevitAddIns>
