@@ -467,9 +467,12 @@ namespace Q2_Revisions
                 }
             }
 
-            Utils.TaskDialogInformation("Q2 Revisions", "Separate Switches",
-                $"{switchCopyCount} {(switchCopyCount == 1 ? "switch was" : "switches were")} duplicated to separate lights and exhaust fans at wet areas. Verify placement and update circuits as needed.");
+            // create notification message
+            string switchMsg = $"{switchCopyCount} {(switchCopyCount == 1 ? "switch was" : "switches were")} duplicated" +
+                $"so lights and exhaust fans can be switched separately at wet areas. Verify placement and update circuits as needed.";
 
+            // notify the user of switch duplication results
+            Utils.TaskDialogInformation("Q2 Revisions", "Separate Switches", switchMsg);
 
             #endregion
 
@@ -549,7 +552,8 @@ namespace Q2_Revisions
                     }
 
                     Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel",
-                        "The data distribution panel was placed in the Utility Room. Verify the position and ungroup if needed.");
+                        "The data distribution panel was moved to the wall behind the Utility/Laundry" +
+                        "room door. Verify the position and ungroup if needed.");
                 }
             }
 
@@ -580,7 +584,6 @@ namespace Q2_Revisions
             Utils.TaskDialogInformation("Q2 Revisions", "Add WH Outlet Note",
                 "WH outlet note was added to the First Floor Electrical Plan.");
 
-
             #endregion
 
             #endregion
@@ -594,10 +597,6 @@ namespace Q2_Revisions
             if (interiorSheet != null)
                 uidoc.ActiveView = interiorSheet;
 
-            // create variables for updated element counts
-            int vanityCounterCount = 0;
-            int vanityCabinetCount = 0;
-
             // create a transaction
             using (Transaction t14 = new Transaction(curDoc, "Update Vanity Heights"))
             {
@@ -605,17 +604,16 @@ namespace Q2_Revisions
                 t14.Start();
 
                 // call the method to update vanity counter and cabinet heights
-                UpdateVanityHeights(curDoc, out vanityCounterCount, out vanityCabinetCount);
+                UpdateVanityHeights(curDoc);
 
                 // commit the transaction
                 t14.Commit();
             }
 
-            // notify the user of vanity height update results
+            // notify the user
             Utils.TaskDialogInformation("Q2 Revisions", "Update Vanity Heights",
-                $"{vanityCounterCount} vanity {(vanityCounterCount == 1 ? "counter was" : "counters were")} updated to 3'-0\" " +
-                $"and {vanityCabinetCount} vanity {(vanityCabinetCount == 1 ? "cabinet was" : "cabinets were")} updated to 2'-10½\".");
-
+                "Vanity cabinets and counters were raised to 3'-0\" AFF.");
+            
             #endregion
 
             #region Revision 16: Check Master Bath Vanity Length
@@ -632,18 +630,27 @@ namespace Q2_Revisions
             // pre-step: open Views.rvt in the background and copy the 3 detail legends
             int legendsCopied = CopyDetailLegends(curDoc, uiapp.Application);
 
+            // notify the user of the results of copying the detail legends
             Utils.TaskDialogInformation("Q2 Revisions", "Load Detail Legends",
                 legendsCopied == 0
                     ? "No detail legends were copied. They may already exist in the project or Views.rvt could not be opened."
-                    : $"{legendsCopied} detail legend(s) were loaded into the project.");
+                    : $"{legendsCopied} detail legends were loaded into the project.");
 
             #region Revision 17: Place Water Shut-Off Legend on Foundation Plan Sheets
 
+            // create variable for shut-off legend placement count
             int shutOffPlaced = 0;
+
+            // create a transaction
             using (Transaction t17 = new Transaction(curDoc, "Place Water Shut-Off Legend"))
             {
+                // start the transaction
                 t17.Start();
+
+                // call the method to place the Water Shut-Off legend on all Foundation Plan sheets
                 shutOffPlaced = PlaceWaterShutOffLegend(curDoc);
+
+                // commit the transaction
                 t17.Commit();
             }
 
@@ -651,11 +658,19 @@ namespace Q2_Revisions
 
             #region Revision 18: Replace Siding Eave Detail Legend on Exterior Elevation Sheets
 
+            // create variable for siding eave detail legend replacement count
             int sidingReplaced = 0;
+
+            // create a transaction
             using (Transaction t18 = new Transaction(curDoc, "Replace Siding Eave Detail Legend"))
             {
+                // start the transaction
                 t18.Start();
+
+                // call the method to replace the siding eave detail legend on all Exterior Elevation sheets
                 sidingReplaced = ReplaceEaveDetailLegend(curDoc, "siding", "Eave Detail @ Siding w/ Spray Foam");
+
+                // commit the transaction
                 t18.Commit();
             }
 
@@ -663,21 +678,30 @@ namespace Q2_Revisions
 
             #region Revision 19: Replace Brick Eave Detail Legend on Exterior Elevation Sheets (if present)
 
+            // create variable for brick eave detail legend replacement count
             int brickReplaced = 0;
+
+            // create a transaction
             using (Transaction t19 = new Transaction(curDoc, "Replace Brick Eave Detail Legend"))
             {
+                // start the transaction
                 t19.Start();
+
+                // call the method to replace the brick eave detail legend on all Exterior Elevation sheets
                 brickReplaced = ReplaceEaveDetailLegend(curDoc, "brick", "Eave Detail @ Brick w/ Spray Foam");
+
+                // commit the transaction
                 t19.Commit();
             }
 
             #endregion
 
-            // single notification covering all three legend revisions
-            Utils.TaskDialogInformation("Q2 Revisions", "Update Detail Legends",
-                $"Water Shut-Off detail was added to {shutOffPlaced} Foundation Plan sheet(s), " +
-                $"and {sidingReplaced + brickReplaced} instance(s) of eave details were updated on the Exterior Elevation sheets.");
+            // create notification message
+            string detailLegendsMsg = $"Water Shut-Off detail was added to {shutOffPlaced} {(shutOffPlaced == 1 ? "Form/Foundation Plan sheet" : "Form/Foundation Plan sheets")}, " +
+                $"and {sidingReplaced + brickReplaced} {(sidingReplaced + brickReplaced == 1 ? "eave detail was" : "eave details were")} updated on the Exterior Elevation sheets.";
 
+            // notify the user of detail legend updates
+            Utils.TaskDialogInformation("Q2 Revisions", "Update Detail Legends", detailLegendsMsg);
 
             #endregion
 
@@ -1492,15 +1516,15 @@ namespace Q2_Revisions
                 })
                 .ToList();
 
-            // find wiring whose endpoint is within 6 inches of the original switch — keep those
-            double tolerance = 0.5;
+            // keep wiring whose endpoint is within 1' of the switch insertion point;
+            // the switch symbol is a fixed size so the wire endpoint is always ~8.5" away
             HashSet<ElementId> keepIds = new HashSet<ElementId>(
                 roomWiring
                     .Where(ce =>
                     {
                         Curve curve = ce.GeometryCurve;
-                        return curve.GetEndPoint(0).DistanceTo(switchPt) <= tolerance
-                            || curve.GetEndPoint(1).DistanceTo(switchPt) <= tolerance;
+                        return curve.GetEndPoint(0).DistanceTo(switchPt) <= 1.0
+                            || curve.GetEndPoint(1).DistanceTo(switchPt) <= 1.0;
                     })
                     .Select(ce => ce.Id));
 
@@ -1511,7 +1535,6 @@ namespace Q2_Revisions
                     curDoc.Delete(ce.Id);
             }
         }
-
 
         /// <summary>
         /// method to copy a wall-hosted light switch 4" away on the side of the switch
@@ -1786,12 +1809,8 @@ namespace Q2_Revisions
         /// method to update the Counter Height on all --Vanity Counter-- instances to 3'-0"
         /// and the Cabinet Height on all families containing "Vanity Cabinet" to 2'-10½".
         /// </summary>
-        private void UpdateVanityHeights(Document curDoc, out int counterCount, out int cabinetCount)
+        private void UpdateVanityHeights(Document curDoc)
         {
-            // initialize counts
-            counterCount = 0;
-            cabinetCount = 0;
-
             // collect all family instances project-wide
             List<FamilyInstance> allInstances = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
@@ -1808,10 +1827,7 @@ namespace Q2_Revisions
                 {
                     Parameter counterHeight = fi.LookupParameter("Counter Height");
                     if (counterHeight != null && !counterHeight.IsReadOnly)
-                    {
                         counterHeight.Set(3.0);
-                        counterCount++;
-                    }
                 }
 
                 // check for any family containing "Vanity Cabinet" and update Cabinet Height to 2'-10½"
@@ -1819,11 +1835,7 @@ namespace Q2_Revisions
                 {
                     Parameter cabinetHeight = fi.LookupParameter("Cabinet Height");
                     if (cabinetHeight != null && !cabinetHeight.IsReadOnly)
-                    {
-                        // 2'-10½" = 2 + 10.5/12 feet
                         cabinetHeight.Set(2.0 + 10.5 / 12.0);
-                        cabinetCount++;
-                    }
                 }
             }
         }
