@@ -1869,16 +1869,6 @@ namespace Q2_Revisions
             {
                 "LD_CW_Vanity_2-Dr_1-Drwr_Flush",
                 "LD_CW_Vanity_2-Dr_2-Drwr_Flush",
-                "LD_CW_Vanity_2-Dr_Full Height_Flush",
-                "LD_CW_Vanity_2-Dr_Full Height_Flush_Butt",
-                "LD_CW_Vanity_3-Drwr_Flush",
-                "LD_CW_Vanity_3-Drwr_Recess",
-                "LD_CW_Vanity_4-Drwr_EQ_Flush",
-                "LD_CW_Vanity_4-Drwr_Flush",
-                "LD_CW_Vanity_4-Drwr_Recess",
-                "LD_CW_Vanity_Sink_2-Dr_Flush",
-                "LD_CW_Vanity_Sink_4-Dr_Flush",
-                "LD-CW_Vanity_Filler",
             };
 
             foreach (string familyName in familyNames)
