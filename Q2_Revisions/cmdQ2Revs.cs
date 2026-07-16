@@ -653,7 +653,7 @@ namespace Q2_Revisions
                 }
 
                 // create notification message
-                string vanityCabMsg = "The Master Bath vanity is 60\" or longer. New vanity cabinet families were loaded into the project.";
+                string vanityCabMsg = "Vanity cabinet families loaded for Master Bath vanity revision.";
 
                 // notify the user that vanity cabinet families were loaded
                 Utils.TaskDialogInformation("Q2 Revisions", "Load Vanity Cabinet Families", vanityCabMsg);
