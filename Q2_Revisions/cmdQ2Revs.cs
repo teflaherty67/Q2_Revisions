@@ -1081,16 +1081,23 @@ namespace Q2_Revisions
                 // delete the SRO so the wall heals
                 curDoc.Delete(sro.Id);
 
+                // minimum segment length Revit will accept (just over 1/8")
+                double minLength = 0.01;
+
                 // shorten the host wall to stop at the left edge of the opening
-                wallLocCurve.Curve = Line.CreateBound(wallStart, leftEdge);
+                // only if the resulting segment would be long enough
+                if (wallStart.DistanceTo(leftEdge) > minLength)
+                    wallLocCurve.Curve = Line.CreateBound(wallStart, leftEdge);
 
                 // create a new wall from the right edge of the opening to the original wall end
-                Wall.Create(curDoc,
-                    Line.CreateBound(rightEdge, wallEnd),
-                    hostWall.WallType.Id,
-                    hostWall.LevelId,
-                    hostWall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).AsDouble(),
-                    0, hostWall.Flipped, false);
+                // only if the resulting segment would be long enough
+                if (rightEdge.DistanceTo(wallEnd) > minLength)
+                    Wall.Create(curDoc,
+                        Line.CreateBound(rightEdge, wallEnd),
+                        hostWall.WallType.Id,
+                        hostWall.LevelId,
+                        hostWall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).AsDouble(),
+                        0, hostWall.Flipped, false);
             }
 
             // return the number of SROs removed
