@@ -1640,11 +1640,11 @@ namespace Q2_Revisions
         private View GetDistributionBoxElectricalView(Document curDoc)
         {
             FamilyInstance distBox = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_CommunicationDevices)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .FirstOrDefault(fi =>
-                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase));
+                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase) ||
+                    fi.Symbol.FamilyName.Equals("Medicine Cabinet-Framed", StringComparison.OrdinalIgnoreCase));
 
             if (distBox == null) return null;
 
@@ -1719,11 +1719,11 @@ namespace Q2_Revisions
         private FamilyInstance GetDistributionBoxDevice(Document curDoc)
         {
             return new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_CommunicationDevices)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .FirstOrDefault(fi =>
-                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase));
+                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase) ||
+                    fi.Symbol.FamilyName.Equals("Medicine Cabinet-Framed", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
