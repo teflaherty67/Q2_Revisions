@@ -804,8 +804,14 @@ namespace Q2_Revisions
         /// </summary>
         private int UpdateShelving(Document curDoc)
         {
-            // load the new shelving family from the library
-            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
+            // only load the new shelving family if it is not already in the project
+            bool familyExists = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Family))
+                .Cast<Family>()
+                .Any(f => f.Name.Equals("LD_GM_Shelving", StringComparison.OrdinalIgnoreCase));
+
+            if (!familyExists)
+                Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
 
             // find the "4 Shelves" type in the new family
             FamilySymbol newType = Utils.FindFamilySymbol(curDoc, "LD_GM_Shelving", "4 Shelves");
@@ -816,11 +822,12 @@ namespace Q2_Revisions
             // activate the new type if it is not already active
             if (!newType.IsActive) newType.Activate();
 
-            // collect all instances of the old "5 Shelves" type
+            // collect all instances of the old "5 Shelves" type in either family name
             List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "Shelving" && fi.Symbol.Name == "5 Shelves")
+                .Where(fi => (fi.Symbol.FamilyName == "Shelving" || fi.Symbol.FamilyName == "LD_GM_Shelving")
+                          && fi.Symbol.Name == "5 Shelves")
                 .ToList();
 
             // loop through each instance and swap to the new type
