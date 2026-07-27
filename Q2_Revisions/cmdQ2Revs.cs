@@ -822,12 +822,12 @@ namespace Q2_Revisions
             // activate the new type if it is not already active
             if (!newType.IsActive) newType.Activate();
 
-            // collect all instances of the old "5 Shelves" type in either family name
+            // collect all instances of the old shelf types in either family name
             List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .Where(fi => (fi.Symbol.FamilyName == "Shelving" || fi.Symbol.FamilyName == "LD_GM_Shelving")
-                          && fi.Symbol.Name == "5 Shelves")
+                          && (fi.Symbol.Name == "5 Shelves" || fi.Symbol.Name == "12\"/18\""))
                 .ToList();
 
             // loop through each instance and swap to the new type
