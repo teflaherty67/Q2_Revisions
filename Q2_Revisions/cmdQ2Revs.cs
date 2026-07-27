@@ -820,11 +820,12 @@ namespace Q2_Revisions
             // activate the new type if it is not already active
             if (!newType.IsActive) newType.Activate();
 
-            // collect all instances of the old "5 Shelves" type
+            // collect all instances of the old shelf types in either family name
             List<FamilyInstance> oldInstances = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "Shelving" && fi.Symbol.Name == "5 Shelves")
+                .Where(fi => (fi.Symbol.FamilyName == "Shelving" || fi.Symbol.FamilyName == "LD_GM_Shelving")
+                          && (fi.Symbol.Name == "5 Shelves" || fi.Symbol.Name == "12\"/18\""))
                 .ToList();
 
             // loop through each instance and swap to the new type
@@ -1631,11 +1632,11 @@ namespace Q2_Revisions
         private View GetDistributionBoxElectricalView(Document curDoc)
         {
             FamilyInstance distBox = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_CommunicationDevices)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .FirstOrDefault(fi =>
-                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase));
+                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase) ||
+                    fi.Symbol.FamilyName.Equals("Medicine Cabinet-Framed", StringComparison.OrdinalIgnoreCase));
 
             if (distBox == null) return null;
 
@@ -1710,12 +1711,13 @@ namespace Q2_Revisions
         private FamilyInstance GetDistributionBoxDevice(Document curDoc)
         {
             return new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_CommunicationDevices)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .FirstOrDefault(fi =>
-                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase));
+                    fi.Symbol.FamilyName.Equals("Leviton 49605-14P", StringComparison.OrdinalIgnoreCase) ||
+                    fi.Symbol.FamilyName.Equals("Medicine Cabinet-Framed", StringComparison.OrdinalIgnoreCase));
         }
+
 
         /// <summary>
         /// returns the facing orientation of the first family instance found in the group.
