@@ -1326,9 +1326,9 @@ namespace Q2_Revisions
                 .Cast<FamilyInstance>()
                 .Where(fi =>
                 {
-                    // check if the family name is "EL-Wall Base"
+                    // check if the family name is "EL-Wall Base" or "EL-No Base"
                     string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
-                    if (!famName.Contains("EL-Wall Base")) return false;
+                    if (!famName.Contains("EL-Wall Base") && !famName.Contains("EL-No Base")) return false;
 
                     // check if the type name is "WH-Tstat"
                     return fi.Symbol.Name.Equals("WH-Tstat", StringComparison.OrdinalIgnoreCase);
@@ -1356,9 +1356,9 @@ namespace Q2_Revisions
                 .Cast<FamilySymbol>()
                 .FirstOrDefault(fs =>
                 {
-                    // check that the family name contains "EL-Wall Base"
+                    // check that the family name contains "EL-Wall Base" or "EL-No Base"
                     string famName = fs.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
-                    return famName.Contains("EL-Wall Base") &&
+                    return (famName.Contains("EL-Wall Base") || famName.Contains("EL-No Base")) &&
                            fs.Name.Equals("Outlet-Dual Cat5e-Cat6", StringComparison.OrdinalIgnoreCase);
                 });
 
@@ -2126,7 +2126,8 @@ namespace Q2_Revisions
                     return false;
 
                 string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
-                return famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase)
+                return (famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase) ||
+                        famName.Equals("EL-No Base", StringComparison.OrdinalIgnoreCase))
                     && fi.Symbol.Name.Equals("Switch", StringComparison.OrdinalIgnoreCase);
             }
 
