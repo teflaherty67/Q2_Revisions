@@ -1056,56 +1056,10 @@ namespace Q2_Revisions
                 })
                 .ToList();
 
-            // loop through each SRO and remove it, healing the host wall
+            // loop through each SRO and delete it; wall manipulation is intentionally omitted
+            // since host walls may contain electrical components that would be lost if recreated
             foreach (FamilyInstance sro in sroList)
-            {
-                // get the host wall
-                Wall hostWall = sro.Host as Wall;
-                if (hostWall == null) continue;
-
-                // get the center point of the SRO opening
-                XYZ centerPt = (sro.Location as LocationPoint)?.Point;
-                if (centerPt == null) continue;
-
-                // get the width of the SRO
-                double width = sro.Symbol.LookupParameter("Width")?.AsDouble() ?? 0;
-                if (width <= 0) continue;
-
-                // get the wall location curve and direction
-                LocationCurve wallLocCurve = hostWall.Location as LocationCurve;
-                Line wallLine = wallLocCurve?.Curve as Line;
-                if (wallLine == null) continue;
-
-                // capture the original wall start and end points
-                XYZ wallStart = wallLine.GetEndPoint(0);
-                XYZ wallEnd = wallLine.GetEndPoint(1);
-                XYZ wallDir = wallLine.Direction;
-
-                // calculate the left and right edges of the SRO opening
-                XYZ leftEdge = centerPt - wallDir * (width / 2.0);
-                XYZ rightEdge = centerPt + wallDir * (width / 2.0);
-
-                // delete the SRO so the wall heals
                 curDoc.Delete(sro.Id);
-
-                // minimum segment length Revit will accept (just over 1/8")
-                double minLength = 0.01;
-
-                // shorten the host wall to stop at the left edge of the opening
-                // only if the resulting segment would be long enough
-                if (wallStart.DistanceTo(leftEdge) > minLength)
-                    wallLocCurve.Curve = Line.CreateBound(wallStart, leftEdge);
-
-                // create a new wall from the right edge of the opening to the original wall end
-                // only if the resulting segment would be long enough
-                if (rightEdge.DistanceTo(wallEnd) > minLength)
-                    Wall.Create(curDoc,
-                        Line.CreateBound(rightEdge, wallEnd),
-                        hostWall.WallType.Id,
-                        hostWall.LevelId,
-                        hostWall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).AsDouble(),
-                        0, hostWall.Flipped, false);
-            }
 
             // return the number of SROs removed
             return sroList.Count;
