@@ -829,8 +829,14 @@ namespace Q2_Revisions
         /// </summary>
         private int UpdateShelving(Document curDoc)
         {
-            // load the new shelving family from the library
-            Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
+            // only load the new shelving family if it is not already in the project
+            bool familyExists = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Family))
+                .Cast<Family>()
+                .Any(f => f.Name.Equals("LD_GM_Shelving", StringComparison.OrdinalIgnoreCase));
+
+            if (!familyExists)
+                Utils.LoadFamilyFromLibrary(curDoc, ShelvingFamilyPath, "LD_GM_Shelving");
 
             // find the "4 Shelves" type in the new family
             FamilySymbol newType = Utils.FindFamilySymbol(curDoc, "LD_GM_Shelving", "4 Shelves");
@@ -1059,8 +1065,7 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// method to remove all SROs from the current document.
-        /// returns number of SROs removed.
+        /// method to remove all SROs from the current document
         /// </summary>
         private int RemoveSROs(Document curDoc)
         {
@@ -1108,16 +1113,23 @@ namespace Q2_Revisions
                 // delete the SRO so the wall heals
                 curDoc.Delete(sro.Id);
 
+                // minimum segment length Revit will accept (just over 1/8")
+                double minLength = 0.01;
+
                 // shorten the host wall to stop at the left edge of the opening
-                wallLocCurve.Curve = Line.CreateBound(wallStart, leftEdge);
+                // only if the resulting segment would be long enough
+                if (wallStart.DistanceTo(leftEdge) > minLength)
+                    wallLocCurve.Curve = Line.CreateBound(wallStart, leftEdge);
 
                 // create a new wall from the right edge of the opening to the original wall end
-                Wall.Create(curDoc,
-                    Line.CreateBound(rightEdge, wallEnd),
-                    hostWall.WallType.Id,
-                    hostWall.LevelId,
-                    hostWall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).AsDouble(),
-                    0, hostWall.Flipped, false);
+                // only if the resulting segment would be long enough
+                if (rightEdge.DistanceTo(wallEnd) > minLength)
+                    Wall.Create(curDoc,
+                        Line.CreateBound(rightEdge, wallEnd),
+                        hostWall.WallType.Id,
+                        hostWall.LevelId,
+                        hostWall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).AsDouble(),
+                        0, hostWall.Flipped, false);
             }
 
             // return the number of SROs removed
@@ -1339,9 +1351,9 @@ namespace Q2_Revisions
                 .Cast<FamilyInstance>()
                 .Where(fi =>
                 {
-                    // check if the family name is "EL-Wall Base"
+                    // check if the family name is "EL-Wall Base" or "EL-No Base"
                     string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
-                    if (!famName.Contains("EL-Wall Base")) return false;
+                    if (!famName.Contains("EL-Wall Base") && !famName.Contains("EL-No Base")) return false;
 
                     // check if the type name is "WH-Tstat"
                     return fi.Symbol.Name.Equals("WH-Tstat", StringComparison.OrdinalIgnoreCase);
@@ -1369,9 +1381,9 @@ namespace Q2_Revisions
                 .Cast<FamilySymbol>()
                 .FirstOrDefault(fs =>
                 {
-                    // check that the family name contains "EL-Wall Base"
+                    // check that the family name contains "EL-Wall Base" or "EL-No Base"
                     string famName = fs.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
-                    return famName.Contains("EL-Wall Base") &&
+                    return (famName.Contains("EL-Wall Base") || famName.Contains("EL-No Base")) &&
                            fs.Name.Equals("Outlet-Dual Cat5e-Cat6", StringComparison.OrdinalIgnoreCase);
                 });
 
@@ -1925,6 +1937,7 @@ namespace Q2_Revisions
                 Utils.LoadFamilyFromLibrary(curDoc, VanityCabinetPath, familyName);
         }
 
+
         #endregion
 
         #region Detail Items Revisions Methods
@@ -2140,14 +2153,13 @@ namespace Q2_Revisions
                     return false;
 
                 string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
-                return famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase)
+                return (famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase) ||
+                        famName.Equals("EL-No Base", StringComparison.OrdinalIgnoreCase))
                     && fi.Symbol.Name.Equals("Switch", StringComparison.OrdinalIgnoreCase);
             }
 
             public bool AllowReference(Reference reference, XYZ position) => false;
         }
-
-
 
         /// <summary>
         /// selection filter that restricts element picking to wall-hosted family instances only,
