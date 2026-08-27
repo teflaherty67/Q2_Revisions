@@ -9,30 +9,17 @@ namespace Q2_Revisions
     public class cmdQ2Revs : IExternalCommand
     {
         // set variables for file paths
-        private string ShelvingFamilyPath;
-        private string CeilingItemsPath;
-        private string DoorFamilyPath;
-        private string VanityCabinetPath;
-        private string ViewsFilePath;
+        private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
+        private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
+        private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
+        private const string VanityCabinetPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
+        private const string ViewsFilePath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Template\Views.rvt";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             UIApplication uiapp = commandData.Application;
             UIDocument uidoc = uiapp.ActiveUIDocument;
             Document curDoc = uidoc.Document;
-
-            // set library year and file paths based on the running version of Revit
-            string libraryYear;
-            if (uiapp.Application.VersionNumber == "2026")
-                libraryYear = "Library 2026";
-            else
-                libraryYear = "Library 2027";
-
-            ShelvingFamilyPath = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Generic Model\Interior";
-            CeilingItemsPath   = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Generic Model\Interior";
-            DoorFamilyPath     = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Doors";
-            VanityCabinetPath  = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Casework\Bath";
-            ViewsFilePath      = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Template\Views.rvt";
 
             // create & set required variables for the command
             string planName = curDoc.ProjectInformation.LookupParameter("Plan Name")?.AsString() ?? curDoc.Title;
@@ -143,6 +130,7 @@ namespace Q2_Revisions
 
             // notify the user of ceiling items update
             Utils.TaskDialogInformation("Q2 Revisions", "Update Ceiling Items", clgItemsMsg);
+
 
             #endregion
 
@@ -609,7 +597,6 @@ namespace Q2_Revisions
             // notify the user of WH outlet note addition
             Utils.TaskDialogInformation("Q2 Revisions", "Add WH Outlet Note", whNoteMsg);
 
-
             #endregion
 
             #endregion
@@ -624,16 +611,16 @@ namespace Q2_Revisions
                 uidoc.ActiveView = interiorSheet;
 
             // create a transaction
-            using (Transaction t14 = new Transaction(curDoc, "Update Vanity Heights"))
+            using (Transaction t15 = new Transaction(curDoc, "Update Vanity Heights"))
             {
                 // start the transaction
-                t14.Start();
+                t15.Start();
 
                 // call the method to update vanity counter and cabinet heights
                 UpdateVanityHeights(curDoc);
 
                 // commit the transaction
-                t14.Commit();
+                t15.Commit();
             }
 
             // create notification message
@@ -641,6 +628,7 @@ namespace Q2_Revisions
 
             // notify the user of vanity height update results
             Utils.TaskDialogInformation("Q2 Revisions", "Update Vanity Heights", vanityMsg);
+
 
             #endregion
 
@@ -691,11 +679,19 @@ namespace Q2_Revisions
 
             #region Revision 17: Place Water Shut-Off Legend on Foundation Plan Sheets
 
+            // create variable for shut-off legend placement count
             int shutOffPlaced = 0;
+
+            // create a transaction
             using (Transaction t17 = new Transaction(curDoc, "Place Water Shut-Off Legend"))
             {
+                // start the transaction
                 t17.Start();
+
+                // call the method to place the Water Shut-Off legend on all Foundation Plan sheets
                 shutOffPlaced = PlaceWaterShutOffLegend(curDoc);
+
+                // commit the transaction
                 t17.Commit();
             }
 
@@ -703,11 +699,19 @@ namespace Q2_Revisions
 
             #region Revision 18: Replace Siding Eave Detail Legend on Exterior Elevation Sheets
 
+            // create variable for siding eave detail legend replacement count
             int sidingReplaced = 0;
+
+            // create a transaction
             using (Transaction t18 = new Transaction(curDoc, "Replace Siding Eave Detail Legend"))
             {
+                // start the transaction
                 t18.Start();
+
+                // call the method to replace the siding eave detail legend on all Exterior Elevation sheets
                 sidingReplaced = ReplaceEaveDetailLegend(curDoc, "siding", "Eave Detail @ Siding w/ Spray Foam");
+
+                // commit the transaction
                 t18.Commit();
             }
 
@@ -715,11 +719,19 @@ namespace Q2_Revisions
 
             #region Revision 19: Replace Brick Eave Detail Legend on Exterior Elevation Sheets (if present)
 
+            // create variable for brick eave detail legend replacement count
             int brickReplaced = 0;
+
+            // create a transaction
             using (Transaction t19 = new Transaction(curDoc, "Replace Brick Eave Detail Legend"))
             {
+                // start the transaction
                 t19.Start();
+
+                // call the method to replace the brick eave detail legend on all Exterior Elevation sheets
                 brickReplaced = ReplaceEaveDetailLegend(curDoc, "brick", "Eave Detail @ Brick w/ Spray Foam");
+
+                // commit the transaction
                 t19.Commit();
             }
 
@@ -731,7 +743,6 @@ namespace Q2_Revisions
 
             // notify the user of detail legend updates
             Utils.TaskDialogInformation("Q2 Revisions", "Update Detail Legends", detailLegendsMsg);
-
 
             #endregion
 
@@ -778,6 +789,7 @@ namespace Q2_Revisions
             // notify the user that all revisions are complete
             Utils.TaskDialogInformation("Q2 Revisions", "Q2 Revisions Complete", completionMsg);
 
+
             // launch the .txt file automatically after the user closes the dialog
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(txtFilePath)
             {
@@ -790,7 +802,7 @@ namespace Q2_Revisions
         #region Floor Plan Revisions Methods
 
         /// <summary>
-        /// method to set active view to the First Floor Plan Annotation view, if it exists.
+        /// method to set active view to the First Floor Plan annotation view, if it exists.
         /// </summary>
         private View GetFirstFloorAnnotationView(Document curDoc)
         {
@@ -947,7 +959,7 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// method to update Ceiliing Items family in the current document
+        /// method to update --Ceiliing Items-- family in the current document
         /// to the show current version of the "Disp Stairs" family type.
         /// returns number of instances updated
         /// </summary>
@@ -1463,6 +1475,7 @@ namespace Q2_Revisions
             return swappedRooms;
         }
 
+
         /// <summary>
         /// method to place 6 LT-No Base / LED fixtures around the selected ceiling fan.
         /// 2 fixtures are placed directly in line with the fan (left and right along the view's
@@ -1581,7 +1594,6 @@ namespace Q2_Revisions
                     curDoc.Delete(ce.Id);
             }
         }
-
 
         /// <summary>
         /// method to copy a wall-hosted light switch 4" away on the side of the switch
@@ -1739,6 +1751,7 @@ namespace Q2_Revisions
                     fi.Symbol.FamilyName.Equals("Medicine Cabinet-Framed", StringComparison.OrdinalIgnoreCase));
         }
 
+
         /// <summary>
         /// returns the facing orientation of the first family instance found in the group.
         /// falls back to XYZ.BasisX if none is found.
@@ -1888,6 +1901,24 @@ namespace Q2_Revisions
         }
 
         /// <summary>
+        /// finds the --Vanity Counter-- instance in the Master Bath room and returns its length in feet.
+        /// returns -1 if no counter is found.
+        /// </summary>
+        private double GetMasterBathVanityCounterLength(Document curDoc)
+        {
+            FamilyInstance counter = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(FamilyInstance))
+                .Cast<FamilyInstance>()
+                .FirstOrDefault(fi =>
+                    (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
+                        .Contains("--Vanity Counter--")
+                    && (fi.Room?.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? string.Empty)
+                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0);
+
+            return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
+        }
+
+        /// <summary>
         /// loads all vanity cabinet families from the Bath casework library folder into the project.
         /// </summary>
         private void LoadVanityCabinetFamilies(Document curDoc)
@@ -1906,28 +1937,11 @@ namespace Q2_Revisions
                 Utils.LoadFamilyFromLibrary(curDoc, VanityCabinetPath, familyName);
         }
 
-        /// <summary>
-        /// finds the --Vanity Counter-- instance in the Master Bath room and returns its length in feet.
-        /// returns -1 if no counter is found.
-        /// </summary>
-        private double GetMasterBathVanityCounterLength(Document curDoc)
-        {
-            FamilyInstance counter = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(FamilyInstance))
-                .Cast<FamilyInstance>()
-                .FirstOrDefault(fi =>
-                    (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
-                        .Contains("--Vanity Counter--")
-                    && (fi.Room?.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? string.Empty)
-                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0);
-
-            return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
-        }
 
         #endregion
 
         #region Detail Items Revisions Methods
-        
+
         /// <summary>
         /// opens Views.rvt in the background, copies the 3 detail legends into curDoc
         /// (skipping any that already exist), then closes the source document.
@@ -2146,8 +2160,6 @@ namespace Q2_Revisions
 
             public bool AllowReference(Reference reference, XYZ position) => false;
         }
-
-
 
         /// <summary>
         /// selection filter that restricts element picking to wall-hosted family instances only,
