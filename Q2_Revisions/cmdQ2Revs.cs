@@ -1113,8 +1113,8 @@ namespace Q2_Revisions
                 // delete the SRO so the wall heals
                 curDoc.Delete(sro.Id);
 
-                // minimum segment length Revit will accept (just over 1/8")
-                double minLength = 0.01;
+                // minimum segment length Revit will accept for wall creation (1")
+                double minLength = 1.0 / 12.0;
 
                 // shorten the host wall to stop at the left edge of the opening
                 // only if the resulting segment would be long enough
