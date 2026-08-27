@@ -9,17 +9,30 @@ namespace Q2_Revisions
     public class cmdQ2Revs : IExternalCommand
     {
         // set variables for file paths
-        private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
-        private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
-        private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
-        private const string VanityCabinetPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
-        private const string ViewsFilePath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Template\Views.rvt";
+        private string ShelvingFamilyPath;
+        private string CeilingItemsPath;
+        private string DoorFamilyPath;
+        private string VanityCabinetPath;
+        private string ViewsFilePath;
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             UIApplication uiapp = commandData.Application;
             UIDocument uidoc = uiapp.ActiveUIDocument;
             Document curDoc = uidoc.Document;
+
+            // set library year and file paths based on the current year
+            string libraryYear;
+            if (DateTime.Now.Year == 2026)
+                libraryYear = "Library 2026";
+            else
+                libraryYear = "Library 2027";
+
+            ShelvingFamilyPath = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Generic Model\Interior";
+            CeilingItemsPath   = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Generic Model\Interior";
+            DoorFamilyPath     = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Doors";
+            VanityCabinetPath  = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Casework\Bath";
+            ViewsFilePath      = $@"S:\Shared Folders\Lifestyle USA Design\{libraryYear}\Template\Views.rvt";
 
             // create & set required variables for the command
             string planName = curDoc.ProjectInformation.LookupParameter("Plan Name")?.AsString() ?? curDoc.Title;
