@@ -1106,9 +1106,12 @@ namespace Q2_Revisions
                 XYZ wallEnd = wallLine.GetEndPoint(1);
                 XYZ wallDir = wallLine.Direction;
 
+                // flatten center point to the wall's Z so edge points are coplanar with the wall curve
+                XYZ centerFlat = new XYZ(centerPt.X, centerPt.Y, wallStart.Z);
+
                 // calculate the left and right edges of the SRO opening
-                XYZ leftEdge = centerPt - wallDir * (width / 2.0);
-                XYZ rightEdge = centerPt + wallDir * (width / 2.0);
+                XYZ leftEdge = centerFlat - wallDir * (width / 2.0);
+                XYZ rightEdge = centerFlat + wallDir * (width / 2.0);
 
                 // delete the SRO so the wall heals
                 curDoc.Delete(sro.Id);
