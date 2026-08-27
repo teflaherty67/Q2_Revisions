@@ -1106,15 +1106,18 @@ namespace Q2_Revisions
                 XYZ wallEnd = wallLine.GetEndPoint(1);
                 XYZ wallDir = wallLine.Direction;
 
+                // flatten center point to the wall's Z so edge points are coplanar with the wall curve
+                XYZ centerFlat = new XYZ(centerPt.X, centerPt.Y, wallStart.Z);
+
                 // calculate the left and right edges of the SRO opening
-                XYZ leftEdge = centerPt - wallDir * (width / 2.0);
-                XYZ rightEdge = centerPt + wallDir * (width / 2.0);
+                XYZ leftEdge = centerFlat - wallDir * (width / 2.0);
+                XYZ rightEdge = centerFlat + wallDir * (width / 2.0);
 
                 // delete the SRO so the wall heals
                 curDoc.Delete(sro.Id);
 
-                // minimum segment length Revit will accept (just over 1/8")
-                double minLength = 0.01;
+                // minimum segment length Revit will accept for wall creation (1")
+                double minLength = 1.0 / 12.0;
 
                 // shorten the host wall to stop at the left edge of the opening
                 // only if the resulting segment would be long enough
@@ -1887,7 +1890,15 @@ namespace Q2_Revisions
                 {
                     Parameter counterHeight = fi.LookupParameter("Counter Height");
                     if (counterHeight != null && !counterHeight.IsReadOnly)
+                    {
+                        // calculate how much the counter is being raised and apply the same delta to Mirror Height
+                        double delta = 3.0 - counterHeight.AsDouble();
                         counterHeight.Set(3.0);
+
+                        Parameter mirrorHeight = fi.LookupParameter("Mirror Height");
+                        if (mirrorHeight != null && !mirrorHeight.IsReadOnly)
+                            mirrorHeight.Set(mirrorHeight.AsDouble() + delta);
+                    }
                 }
 
                 // check for any family containing "Vanity Cabinet" and update Cabinet Height to 2'-10½"
@@ -1928,7 +1939,11 @@ namespace Q2_Revisions
                 "LD_CW_Vanity_2-Dr_1-Drwr_Flush",
                 "LD_CW_Vanity_2-Dr_2-Drwr_Flush",
                 "LD_CW_Vanity_3-Drwr_Flush",
+                "LD_CW_Vanity_3-Drwr_Recess",
+                "LD_CW_Vanity_4-Drwr_Recess",
+                "LD_CW_Vanity_Sink_1-Dr_Recess",
                 "LD_CW_Vanity_Sink_2-Dr_Flush",
+                "LD_CW_Vanity_Sink_2-Dr_Recess",
                 "LD_CW_Vanity_Filler",
                 "LD_CW_Vanity_Filler_Sizes",
             };
@@ -1936,7 +1951,6 @@ namespace Q2_Revisions
             foreach (string familyName in familyNames)
                 Utils.LoadFamilyFromLibrary(curDoc, VanityCabinetPath, familyName);
         }
-
 
         #endregion
 
