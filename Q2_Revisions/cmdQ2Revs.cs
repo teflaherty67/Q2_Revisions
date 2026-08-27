@@ -1890,7 +1890,15 @@ namespace Q2_Revisions
                 {
                     Parameter counterHeight = fi.LookupParameter("Counter Height");
                     if (counterHeight != null && !counterHeight.IsReadOnly)
+                    {
+                        // calculate how much the counter is being raised and apply the same delta to Mirror Height
+                        double delta = 3.0 - counterHeight.AsDouble();
                         counterHeight.Set(3.0);
+
+                        Parameter mirrorHeight = fi.LookupParameter("Mirror Height");
+                        if (mirrorHeight != null && !mirrorHeight.IsReadOnly)
+                            mirrorHeight.Set(mirrorHeight.AsDouble() + delta);
+                    }
                 }
 
                 // check for any family containing "Vanity Cabinet" and update Cabinet Height to 2'-10½"
