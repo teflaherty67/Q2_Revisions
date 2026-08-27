@@ -1912,11 +1912,19 @@ namespace Q2_Revisions
             FamilyInstance counter = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
+                .Where(fi => (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
+                    .Contains("--Vanity Counter--"))
                 .FirstOrDefault(fi =>
-                    (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
-                        .Contains("--Vanity Counter--")
-                    && (fi.Room?.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? string.Empty)
-                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0);
+                {
+                    XYZ loc = (fi.Location as LocationPoint)?.Point;
+                    if (loc == null) return false;
+
+                    Room room = curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z + 1.0))
+                             ?? curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z - 1.0));
+
+                    return (room?.LookupParameter("Name")?.AsString() ?? string.Empty)
+                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0;
+                });
 
             return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
         }
