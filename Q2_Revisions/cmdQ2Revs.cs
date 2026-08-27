@@ -21,9 +21,9 @@ namespace Q2_Revisions
             UIDocument uidoc = uiapp.ActiveUIDocument;
             Document curDoc = uidoc.Document;
 
-            // set library year and file paths based on the current year
+            // set library year and file paths based on the running version of Revit
             string libraryYear;
-            if (DateTime.Now.Year == 2026)
+            if (uiapp.Application.VersionNumber == "2026")
                 libraryYear = "Library 2026";
             else
                 libraryYear = "Library 2027";
