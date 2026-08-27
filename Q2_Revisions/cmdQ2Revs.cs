@@ -1916,7 +1916,13 @@ namespace Q2_Revisions
                     .Contains("--Vanity Counter--"))
                 .FirstOrDefault(fi =>
                 {
+                    // try LocationPoint first, then midpoint of LocationCurve for line-based families
                     XYZ loc = (fi.Location as LocationPoint)?.Point;
+                    if (loc == null)
+                    {
+                        Curve curve = (fi.Location as LocationCurve)?.Curve;
+                        loc = curve?.Evaluate(0.5, true);
+                    }
                     if (loc == null) return false;
 
                     Room room = curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z + 1.0))
