@@ -1652,17 +1652,12 @@ namespace Q2_Revisions
                 }
             }
 
-            // offset 4 inches (4/12 feet) along the wall in the opposite direction from the door
-            XYZ newPt = switchPt + copyDir.Multiply(4.0 / 12.0);
+            // copy the switch 4 inches along the wall away from the door
+            // CopyElement preserves the wall face and handles mirrored/flipped walls correctly
+            XYZ translation = copyDir.Multiply(4.0 / 12.0);
+            ICollection<ElementId> copiedIds = ElementTransformUtils.CopyElement(curDoc, switchInst.Id, translation);
 
-            // create the new switch instance on the same host wall at the offset position
-            FamilyInstance newSwitch = curDoc.Create.NewFamilyInstance(
-                newPt, switchInst.Symbol, hostWall, switchInst.LookupParameter("Level") != null
-                    ? curDoc.GetElement(switchInst.LevelId) as Level
-                    : null,
-                StructuralType.NonStructural);
-
-            return newSwitch != null ? 1 : 0;
+            return copiedIds.Count > 0 ? 1 : 0;
         }
 
         /// <summary>
