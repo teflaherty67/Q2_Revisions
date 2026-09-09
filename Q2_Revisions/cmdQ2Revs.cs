@@ -897,12 +897,12 @@ namespace Q2_Revisions
             // create a list to track rooms where the floor finish was updated
             List<string> updatedRooms = new List<string>();
 
-            // find the lowest level in the document (First Floor)
+            // find the level named "Main Level" (formerly "First Floor")
             Level firstFloor = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
-                .OrderBy(l => l.Elevation)
-                .FirstOrDefault();
+                .FirstOrDefault(l => l.Name.Equals("Main Level", StringComparison.OrdinalIgnoreCase)
+                                  || l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
 
             // return empty list if no level is found
             if (firstFloor == null) return updatedRooms;
