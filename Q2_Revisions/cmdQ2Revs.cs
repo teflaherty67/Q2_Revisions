@@ -1851,15 +1851,25 @@ namespace Q2_Revisions
         /// </summary>
         private ViewSheet GetMasterBathInteriorSheet(Document curDoc)
         {
-            // look for a sheet whose name contains "Interior" — prefer one that also contains "Bath"
-            List<ViewSheet> interiorSheets = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(ViewSheet))
-                .Cast<ViewSheet>()
-                .Where(s => s.Name.IndexOf("Interior", StringComparison.OrdinalIgnoreCase) >= 0)
-                .OrderByDescending(s => s.Name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0)
+            // collect all viewports so we can map views to their sheets
+            List<Viewport> allViewports = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Viewport))
+                .Cast<Viewport>()
                 .ToList();
 
-            return interiorSheets.FirstOrDefault();
+            foreach (Viewport vp in allViewports)
+            {
+                View view = curDoc.GetElement(vp.ViewId) as View;
+                if (view == null) continue;
+
+                // only consider interior elevation views whose name contains "Master Bath"
+                if (view.ViewType != ViewType.Elevation) continue;
+                if (view.Name.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                return curDoc.GetElement(vp.SheetId) as ViewSheet;
+            }
+
+            return null;
         }
 
         /// <summary>
