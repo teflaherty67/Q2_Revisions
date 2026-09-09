@@ -1851,11 +1851,12 @@ namespace Q2_Revisions
         /// </summary>
         private ViewSheet GetMasterBathInteriorSheet(Document curDoc)
         {
-            // collect all views whose name contains "Bath", preferring "Master Bath"
+            // collect interior elevation views whose name contains "Bath", preferring "Master Bath"
             List<View> bathViews = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(View))
                 .Cast<View>()
-                .Where(v => v.Name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(v => v.ViewType == ViewType.Elevation
+                         && v.Name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0)
                 .OrderByDescending(v => v.Name.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0)
                 .ToList();
 
