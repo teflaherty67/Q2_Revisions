@@ -94,7 +94,7 @@ namespace Q2_Revisions
 
                 // create notification message
                 string flooringMsg = updatedRooms.Count == 0
-                    ? "The flooring in all First Floor rooms is already HS."
+                    ? "The flooring in all Main Level rooms is already HS."
                     : $"The flooring was changed in the following {updatedRooms.Count} {(updatedRooms.Count == 1 ? "room" : "rooms")}:\n" +
                       string.Join("\n", updatedRooms.Select(r => $"• {r}"));
 
@@ -806,16 +806,17 @@ namespace Q2_Revisions
         /// </summary>
         private View GetFirstFloorAnnotationView(Document curDoc)
         {
-            // find the level named "First Floor"
+            // find the level named "Main Level" (formerly "First Floor")
             Level firstFloor = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
-                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(l => l.Name.Equals("Main Level", StringComparison.OrdinalIgnoreCase)
+                                  || l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
 
             // return null if the level is not found
             if (firstFloor == null) return null;
 
-            // find and return a ViewPlan associated with First Floor whose name contains "Annotation"
+            // find and return a ViewPlan associated with Main Level whose name contains "Annotation"
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
@@ -1260,16 +1261,17 @@ namespace Q2_Revisions
         /// </summary>
         private View GetFirstFloorElectricalView(Document curDoc)
         {
-            // find the level named "First Floor"
+            // find the level named "Main Level" (formerly "First Floor")
             Level firstFloor = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
-                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(l => l.Name.Equals("Main Level", StringComparison.OrdinalIgnoreCase)
+                                  || l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
 
             // return null if the level is not found
             if (firstFloor == null) return null;
 
-            // find and return a ViewPlan associated with First Floor whose name contains "Electrical"
+            // find and return a ViewPlan associated with Main Level whose name contains "Electrical"
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
