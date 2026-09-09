@@ -94,7 +94,7 @@ namespace Q2_Revisions
 
                 // create notification message
                 string flooringMsg = updatedRooms.Count == 0
-                    ? "The flooring in all First Floor rooms is already HS."
+                    ? "The flooring in all First Floor/Main Level rooms is already HS."
                     : $"The flooring was changed in the following {updatedRooms.Count} {(updatedRooms.Count == 1 ? "room" : "rooms")}:\n" +
                       string.Join("\n", updatedRooms.Select(r => $"• {r}"));
 
@@ -797,31 +797,34 @@ namespace Q2_Revisions
             });
 
             return Result.Succeeded;
-        }       
-        
+        }
+
         #region Floor Plan Revisions Methods
 
         /// <summary>
-        /// method to set active view to the First Floor Plan annotation view, if it exists.
+        /// method to set active view to the First Floor, or Main Level,
+        /// annotation view, if it exists.
         /// </summary>
         private View GetFirstFloorAnnotationView(Document curDoc)
         {
-            // find the level named "First Floor"
+            // find the level named "Main Level" (formerly "First Floor")
             Level firstFloor = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
-                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(l => l.Name.Equals("Main Level", StringComparison.OrdinalIgnoreCase)
+                                  || l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
 
             // return null if the level is not found
             if (firstFloor == null) return null;
 
-            // find and return a ViewPlan associated with First Floor whose name contains "Annotation"
+            // find and return a ViewPlan associated with Main Level whose name contains "Annotation"
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
                 .FirstOrDefault(v => v.GenLevel?.Id == firstFloor.Id &&
                                      v.Name.IndexOf("Annotation", StringComparison.OrdinalIgnoreCase) >= 0);
         }
+
 
         /// <summary>
         /// method to update all instances of the "Shelving" 
@@ -887,7 +890,7 @@ namespace Q2_Revisions
         }
 
         /// <summary>
-        /// method to update flooring in all rooms on the first floor to "HS" (Hard Surface)
+        /// method to update flooring in all rooms on the first floor/main level to "HS" (Hard Surface)
         /// if they are not already "Concrete", "Conc", or "HS", and delete any floor break
         /// symbols where Floor 1 or Floor 2 = "C".
         /// </summary>
@@ -896,12 +899,12 @@ namespace Q2_Revisions
             // create a list to track rooms where the floor finish was updated
             List<string> updatedRooms = new List<string>();
 
-            // find the lowest level in the document (First Floor)
+            // find the level named "Main Level" (formerly "First Floor")
             Level firstFloor = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
-                .OrderBy(l => l.Elevation)
-                .FirstOrDefault();
+                .FirstOrDefault(l => l.Name.Equals("Main Level", StringComparison.OrdinalIgnoreCase)
+                                  || l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
 
             // return empty list if no level is found
             if (firstFloor == null) return updatedRooms;
@@ -1255,21 +1258,22 @@ namespace Q2_Revisions
         #region Electrical Plan Revisions Methods
 
         /// <summary>
-        /// method to find the First Floor Electrical view in the current document.
+        /// method to find the First Floor Electrical, or Main Level Electrical, view in the current document.
         /// searches for a ViewPlan associated with the First Floor level whose name contains "Electrical".
         /// </summary>
         private View GetFirstFloorElectricalView(Document curDoc)
         {
-            // find the level named "First Floor"
+            // find the level named "Main Level" (formerly "First Floor")
             Level firstFloor = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
-                .FirstOrDefault(l => l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(l => l.Name.Equals("Main Level", StringComparison.OrdinalIgnoreCase)
+                                  || l.Name.Equals("First Floor", StringComparison.OrdinalIgnoreCase));
 
             // return null if the level is not found
             if (firstFloor == null) return null;
 
-            // find and return a ViewPlan associated with First Floor whose name contains "Electrical"
+            // find and return a ViewPlan associated with Main Level whose name contains "Electrical"
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
@@ -1460,13 +1464,15 @@ namespace Q2_Revisions
                 if (roomName.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                 // delete any Lighting Fixture tags associated with this fixture
-                List<ElementId> tagIds = allTags
+                List<IndependentTag> tagsToDelete = allTags
                     .Where(t => t.GetTaggedElementIds().Any(id => id.HostElementId == fi.Id))
-                    .Select(t => t.Id)
                     .ToList();
 
-                foreach (ElementId tagId in tagIds)
-                    curDoc.Delete(tagId);
+                foreach (IndependentTag tag in tagsToDelete)
+                {
+                    curDoc.Delete(tag.Id);
+                    allTags.Remove(tag);
+                }
 
                 // swap the fixture type to standard LED
                 fi.ChangeTypeId(ledSymbol.Id);
@@ -1477,7 +1483,6 @@ namespace Q2_Revisions
             // return the list of rooms where fixtures were swapped
             return swappedRooms;
         }
-
 
         /// <summary>
         /// method to place 6 LT-No Base / LED fixtures around the selected ceiling fan.
@@ -1920,11 +1925,25 @@ namespace Q2_Revisions
             FamilyInstance counter = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
+                .Where(fi => (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
+                    .Contains("--Vanity Counter--"))
                 .FirstOrDefault(fi =>
-                    (fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty)
-                        .Contains("--Vanity Counter--")
-                    && (fi.Room?.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? string.Empty)
-                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0);
+                {
+                    // try LocationPoint first, then midpoint of LocationCurve for line-based families
+                    XYZ loc = (fi.Location as LocationPoint)?.Point;
+                    if (loc == null)
+                    {
+                        Curve curve = (fi.Location as LocationCurve)?.Curve;
+                        loc = curve?.Evaluate(0.5, true);
+                    }
+                    if (loc == null) return false;
+
+                    Room room = curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z + 1.0))
+                             ?? curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z - 1.0));
+
+                    return (room?.LookupParameter("Name")?.AsString() ?? string.Empty)
+                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0;
+                });
 
             return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
         }
