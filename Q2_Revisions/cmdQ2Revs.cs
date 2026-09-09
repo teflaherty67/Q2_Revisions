@@ -2188,7 +2188,7 @@ namespace Q2_Revisions
                 string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
                 return (famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase) ||
                         famName.Equals("EL-No Base", StringComparison.OrdinalIgnoreCase))
-                    && fi.Symbol.Name.Equals("Switch", StringComparison.OrdinalIgnoreCase);
+                    && fi.Symbol.Name.IndexOf("Switch", StringComparison.OrdinalIgnoreCase) >= 0;
             }
 
             public bool AllowReference(Reference reference, XYZ position) => false;
