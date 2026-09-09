@@ -1460,13 +1460,15 @@ namespace Q2_Revisions
                 if (roomName.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                 // delete any Lighting Fixture tags associated with this fixture
-                List<ElementId> tagIds = allTags
+                List<IndependentTag> tagsToDelete = allTags
                     .Where(t => t.GetTaggedElementIds().Any(id => id.HostElementId == fi.Id))
-                    .Select(t => t.Id)
                     .ToList();
 
-                foreach (ElementId tagId in tagIds)
-                    curDoc.Delete(tagId);
+                foreach (IndependentTag tag in tagsToDelete)
+                {
+                    curDoc.Delete(tag.Id);
+                    allTags.Remove(tag);
+                }
 
                 // swap the fixture type to standard LED
                 fi.ChangeTypeId(ledSymbol.Id);
