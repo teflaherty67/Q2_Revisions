@@ -1653,17 +1653,12 @@ namespace Q2_Revisions
                 }
             }
 
-            // offset 4 inches (4/12 feet) along the wall in the opposite direction from the door
-            XYZ newPt = switchPt + copyDir.Multiply(4.0 / 12.0);
+            // copy the switch 4 inches along the wall away from the door
+            // CopyElement preserves the wall face and handles mirrored/flipped walls correctly
+            XYZ translation = copyDir.Multiply(4.0 / 12.0);
+            ICollection<ElementId> copiedIds = ElementTransformUtils.CopyElement(curDoc, switchInst.Id, translation);
 
-            // create the new switch instance on the same host wall at the offset position
-            FamilyInstance newSwitch = curDoc.Create.NewFamilyInstance(
-                newPt, switchInst.Symbol, hostWall, switchInst.LookupParameter("Level") != null
-                    ? curDoc.GetElement(switchInst.LevelId) as Level
-                    : null,
-                StructuralType.NonStructural);
-
-            return newSwitch != null ? 1 : 0;
+            return copiedIds.Count > 0 ? 1 : 0;
         }
 
         /// <summary>
@@ -1852,22 +1847,22 @@ namespace Q2_Revisions
         /// </summary>
         private ViewSheet GetMasterBathInteriorSheet(Document curDoc)
         {
-            // collect all views whose name contains "Bath", preferring "Master Bath"
-            List<View> bathViews = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(View))
-                .Cast<View>()
-                .Where(v => v.Name.IndexOf("Bath", StringComparison.OrdinalIgnoreCase) >= 0)
-                .OrderByDescending(v => v.Name.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0)
+            // collect all viewports so we can map views to their sheets
+            List<Viewport> allViewports = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Viewport))
+                .Cast<Viewport>()
                 .ToList();
 
-            foreach (View view in bathViews)
+            foreach (Viewport vp in allViewports)
             {
-                string sheetNumber = view.LookupParameter("Sheet Number")?.AsString();
-                if (string.IsNullOrEmpty(sheetNumber)) continue;
+                View view = curDoc.GetElement(vp.ViewId) as View;
+                if (view == null) continue;
 
-                ViewSheet sheet = Utils.GetSheetsByNumber(curDoc, sheetNumber).FirstOrDefault();
-                if (sheet != null)
-                    return sheet;
+                // only consider interior elevation views whose name contains "Master Bath"
+                if (view.ViewType != ViewType.Elevation) continue;
+                if (view.Name.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                return curDoc.GetElement(vp.SheetId) as ViewSheet;
             }
 
             return null;
@@ -2188,7 +2183,7 @@ namespace Q2_Revisions
                 string famName = fi.Symbol.get_Parameter(BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)?.AsString() ?? string.Empty;
                 return (famName.Equals("EL-Wall Base", StringComparison.OrdinalIgnoreCase) ||
                         famName.Equals("EL-No Base", StringComparison.OrdinalIgnoreCase))
-                    && fi.Symbol.Name.Equals("Switch", StringComparison.OrdinalIgnoreCase);
+                    && fi.Symbol.Name.IndexOf("Switch", StringComparison.OrdinalIgnoreCase) >= 0;
             }
 
             public bool AllowReference(Reference reference, XYZ position) => false;
