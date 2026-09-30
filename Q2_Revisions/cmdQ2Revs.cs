@@ -8,12 +8,19 @@ namespace Q2_Revisions
     [Transaction(TransactionMode.Manual)]
     public class cmdQ2Revs : IExternalCommand
     {
+        // resolve the library base path — prefer "Shared Folders", fall back to "Folders"
+        private static string GetLibraryBase()
+        {
+            string primary = @"S:\Shared Folders\Lifestyle USA Design\Library 2026";
+            return Directory.Exists(primary) ? primary : @"S:\Folders\Lifestyle USA Design\Library 2026";
+        }
+
         // set variables for file paths
-        private const string ShelvingFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
-        private const string CeilingItemsPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Generic Model\Interior";
-        private const string DoorFamilyPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Doors";
-        private const string VanityCabinetPath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Casework\Bath";
-        private const string ViewsFilePath = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\Template\Views.rvt";
+        private static string ShelvingFamilyPath => Path.Combine(GetLibraryBase(), @"Generic Model\Interior");
+        private static string CeilingItemsPath => Path.Combine(GetLibraryBase(), @"Generic Model\Interior");
+        private static string DoorFamilyPath => Path.Combine(GetLibraryBase(), @"Doors");
+        private static string VanityCabinetPath => Path.Combine(GetLibraryBase(), @"Casework\Bath");
+        private static string ViewsFilePath => Path.Combine(GetLibraryBase(), @"Template\Views.rvt");
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
