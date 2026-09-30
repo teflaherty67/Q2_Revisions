@@ -416,6 +416,7 @@ namespace Q2_Revisions
                            name.IndexOf("Powder", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            name.IndexOf("Pwdr", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            name.IndexOf("Utility", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           name.IndexOf("Util", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            name.IndexOf("Laundry", StringComparison.OrdinalIgnoreCase) >= 0;
                 })
                 .OrderBy(r => (curDoc.GetElement(r.LevelId) as Level)?.Elevation ?? 0)
@@ -1700,6 +1701,7 @@ namespace Q2_Revisions
                 {
                     string name = r.LookupParameter("Name")?.AsString() ?? string.Empty;
                     return name.IndexOf("Utility", StringComparison.OrdinalIgnoreCase) >= 0
+                        || name.IndexOf("Util", StringComparison.OrdinalIgnoreCase) >= 0
                         || name.IndexOf("Laundry", StringComparison.OrdinalIgnoreCase) >= 0;
                 });
 
