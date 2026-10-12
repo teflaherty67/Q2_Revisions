@@ -945,11 +945,11 @@ namespace Q2_Revisions
             }
 
             // collect floor break symbols where Floor 1 or Floor 2 = "C"
+            // search all family instances regardless of category in case the family is not in FurnitureSystems
             List<ElementId> toDelete = new FilteredElementCollector(curDoc)
-                .OfCategory(BuiltInCategory.OST_FurnitureSystems)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName == "Floor Material" && fi.Symbol.Name == "Type 1")
+                .Where(fi => fi.Symbol.FamilyName.IndexOf("Floor Material", StringComparison.OrdinalIgnoreCase) >= 0)
                 .Where(fi =>
                 {
                     string f1 = fi.LookupParameter("Floor 1")?.AsString() ?? string.Empty;
