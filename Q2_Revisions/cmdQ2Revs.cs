@@ -950,6 +950,7 @@ namespace Q2_Revisions
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .Where(fi => fi.Symbol.FamilyName.IndexOf("Material Break", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(fi => fi.LevelId == firstFloor.Id)
                 .Where(fi =>
                 {
                     string f1 = fi.LookupParameter("Floor 1")?.AsString() ?? string.Empty;
