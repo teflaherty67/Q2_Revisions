@@ -950,7 +950,14 @@ namespace Q2_Revisions
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .Where(fi => fi.Symbol.FamilyName.IndexOf("Floor Material", StringComparison.OrdinalIgnoreCase) >= 0)
-                .Where(fi => fi.LevelId == firstFloor.Id)
+                .Where(fi =>
+                {
+                    // filter to main level by comparing the element's Z to the first floor elevation (within 1 story)
+                    XYZ loc = (fi.Location as LocationPoint)?.Point;
+                    if (loc == null) return false;
+                    double zDiff = Math.Abs(loc.Z - firstFloor.Elevation);
+                    return zDiff < 10.0; // within 10' of first floor elevation
+                })
                 .Where(fi =>
                 {
                     string f1 = fi.LookupParameter("Floor 1")?.AsString() ?? string.Empty;
