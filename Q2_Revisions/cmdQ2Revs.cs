@@ -950,8 +950,14 @@ namespace Q2_Revisions
                 .OfCategory(BuiltInCategory.OST_FurnitureSystems)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName.IndexOf("Material Break", StringComparison.OrdinalIgnoreCase) >= 0)
-                .Where(fi => fi.LevelId == firstFloor.Id)
+                .Where(fi => fi.Symbol.FamilyName.IndexOf("Floor Material", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(fi =>
+                {
+                    // exclude elements whose work plane is on the second floor / upper level
+                    string workPlane = fi.LookupParameter("Work Plane")?.AsString() ?? string.Empty;
+                    return workPlane.IndexOf("Second Floor", StringComparison.OrdinalIgnoreCase) < 0
+                        && workPlane.IndexOf("Upper Level", StringComparison.OrdinalIgnoreCase) < 0;
+                })
                 .Where(fi =>
                 {
                     string f1 = fi.LookupParameter("Floor 1")?.AsString() ?? string.Empty;
@@ -1946,8 +1952,9 @@ namespace Q2_Revisions
                     Room room = curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z + 1.0))
                              ?? curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z - 1.0));
 
-                    return (room?.LookupParameter("Name")?.AsString() ?? string.Empty)
-                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0;
+                    string roomName = System.Text.RegularExpressions.Regex.Replace
+                    (room?.LookupParameter("Name")?.AsString() ?? string.Empty, @"\s+", " ").Trim();
+                    return roomName.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0;
                 });
 
             return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
