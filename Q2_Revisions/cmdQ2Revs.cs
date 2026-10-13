@@ -949,7 +949,7 @@ namespace Q2_Revisions
                 .OfCategory(BuiltInCategory.OST_FurnitureSystems)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
-                .Where(fi => fi.Symbol.FamilyName.IndexOf("Material Break", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(fi => fi.Symbol.FamilyName.IndexOf("Floor Material", StringComparison.OrdinalIgnoreCase) >= 0)
                 .Where(fi => fi.LevelId == firstFloor.Id)
                 .Where(fi =>
                 {
