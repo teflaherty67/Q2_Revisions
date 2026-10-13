@@ -1946,8 +1946,9 @@ namespace Q2_Revisions
                     Room room = curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z + 1.0))
                              ?? curDoc.GetRoomAtPoint(new XYZ(loc.X, loc.Y, loc.Z - 1.0));
 
-                    return (room?.LookupParameter("Name")?.AsString() ?? string.Empty)
-                        .IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0;
+                    string roomName = System.Text.RegularExpressions.Regex.Replace(
+                        room?.LookupParameter("Name")?.AsString() ?? string.Empty, @"\s+", " ").Trim();
+                    return roomName.IndexOf("Master Bath", StringComparison.OrdinalIgnoreCase) >= 0;
                 });
 
             return counter?.LookupParameter("Length")?.AsDouble() ?? -1.0;
