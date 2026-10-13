@@ -952,11 +952,10 @@ namespace Q2_Revisions
                 .Where(fi => fi.Symbol.FamilyName.IndexOf("Floor Material", StringComparison.OrdinalIgnoreCase) >= 0)
                 .Where(fi =>
                 {
-                    // filter to main level by comparing the element's Z to the first floor elevation (within 1 story)
-                    XYZ loc = (fi.Location as LocationPoint)?.Point;
-                    if (loc == null) return false;
-                    double zDiff = Math.Abs(loc.Z - firstFloor.Elevation);
-                    return zDiff < 10.0; // within 10' of first floor elevation
+                    // exclude elements whose work plane is on the second floor / upper level
+                    string workPlane = fi.LookupParameter("Work Plane")?.AsString() ?? string.Empty;
+                    return workPlane.IndexOf("Second Floor", StringComparison.OrdinalIgnoreCase) < 0
+                        && workPlane.IndexOf("Upper Level", StringComparison.OrdinalIgnoreCase) < 0;
                 })
                 .Where(fi =>
                 {
