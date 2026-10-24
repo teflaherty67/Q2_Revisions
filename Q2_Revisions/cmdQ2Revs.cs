@@ -496,6 +496,14 @@ namespace Q2_Revisions
 
             #region Revision 13: Move data distribution panel to Utility Room
 
+            // warn and skip if no distribution panel exists in the model
+            if (GetDistributionBoxDevice(curDoc) == null)
+            {
+                TaskDialog.Show("Distribution Panel", "No distribution panel found in this project. Please add a Leviton 49605-14P family instance before running this command.");
+            }
+            else
+            {
+
             // determine which level the distribution panel is on
             View distBoxElecView = GetDistributionBoxElectricalView(curDoc);
 
@@ -576,6 +584,8 @@ namespace Q2_Revisions
                     Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel", panelMsg);
                 }
             }
+
+            } // end else: distribution panel exists
 
             #endregion
 
