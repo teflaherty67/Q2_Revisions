@@ -495,86 +495,95 @@ namespace Q2_Revisions
 
             #region Revision 13: Move data distribution panel to Utility Room
 
-            // determine which level the distribution panel is on
-            View distBoxElecView = GetDistributionBoxElectricalView(curDoc);
-
-            // determine which level the Utility Room is on
-            View utilityElecView = GetUtilityRoomElectricalView(curDoc);
-
-            // switch to the electrical view for the level of the distribution panel
-            if (distBoxElecView != null)
-                uidoc.ActiveView = distBoxElecView;
-
-            // prompt the user to select the distribution panel and all associated elements
-            IList<Reference> panelRefs = null;
-            try
+            // warn and skip if no distribution panel exists in the model
+            if (GetDistributionBoxDevice(curDoc) == null)
             {
-                panelRefs = uidoc.Selection.PickObjects(
-                    ObjectType.Element,
-                    "Select the distribution panel and all associated elements, then click Finish.");
+                TaskDialog.Show("Distribution Panel", "No distribution panel found in this project. Please add a Leviton 49605-14P family instance before running this command.");
             }
-            catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
-
-            if (panelRefs != null && panelRefs.Count > 0)
+            else
             {
-                // transaction 1: group the selected elements, always including the device itself
-                FamilyInstance distBoxDevice = GetDistributionBoxDevice(curDoc);
-                Group panelGroup = null;
-                using (Transaction t13a = new Transaction(curDoc, "Group Distribution Panel"))
-                {
-                    t13a.Start();
-                    List<ElementId> groupIds = panelRefs.Select(r => r.ElementId).ToList();
-                    if (distBoxDevice != null && !groupIds.Contains(distBoxDevice.Id))
-                        groupIds.Add(distBoxDevice.Id);
-                    panelGroup = GroupDistributionPanel(curDoc, groupIds);
-                    t13a.Commit();
-                }
+                // determine which level the distribution panel is on
+                View distBoxElecView = GetDistributionBoxElectricalView(curDoc);
 
-                // switch to the electrical view for the level of the Utility Room
-                if (utilityElecView != null)
-                    uidoc.ActiveView = utilityElecView;
+                // determine which level the Utility Room is on
+                View utilityElecView = GetUtilityRoomElectricalView(curDoc);
 
-                // prompt the user to pick the wall where the panel will go
-                Wall targetWall = null;
+                // switch to the electrical view for the level of the distribution panel
+                if (distBoxElecView != null)
+                    uidoc.ActiveView = distBoxElecView;
+
+                // prompt the user to select the distribution panel and all associated elements
+                IList<Reference> panelRefs = null;
                 try
                 {
-                    Reference wallRef = uidoc.Selection.PickObject(
+                    panelRefs = uidoc.Selection.PickObjects(
                         ObjectType.Element,
-                        new WallSelectionFilter(),
-                        "Pick the wall in the Utility Room where the distribution panel will be placed.");
-                    targetWall = curDoc.GetElement(wallRef) as Wall;
+                        "Select the distribution panel and all associated elements, then click Finish.");
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
 
-                // prompt the user to pick the exact location on that wall
-                XYZ insertPoint = null;
-                if (targetWall != null)
+                if (panelRefs != null && panelRefs.Count > 0)
                 {
+                    // transaction 1: group the selected elements, always including the device itself
+                    FamilyInstance distBoxDevice = GetDistributionBoxDevice(curDoc);
+                    Group panelGroup = null;
+                    using (Transaction t13a = new Transaction(curDoc, "Group Distribution Panel"))
+                    {
+                        t13a.Start();
+                        List<ElementId> groupIds = panelRefs.Select(r => r.ElementId).ToList();
+                        if (distBoxDevice != null && !groupIds.Contains(distBoxDevice.Id))
+                            groupIds.Add(distBoxDevice.Id);
+                        panelGroup = GroupDistributionPanel(curDoc, groupIds);
+                        t13a.Commit();
+                    }
+
+                    // switch to the electrical view for the level of the Utility Room
+                    if (utilityElecView != null)
+                        uidoc.ActiveView = utilityElecView;
+
+                    // prompt the user to pick the wall where the panel will go
+                    Wall targetWall = null;
                     try
                     {
-                        insertPoint = uidoc.Selection.PickPoint(
-                            "Pick the location on the wall for the distribution panel.");
+                        Reference wallRef = uidoc.Selection.PickObject(
+                            ObjectType.Element,
+                            new WallSelectionFilter(),
+                            "Pick the wall in the Utility Room where the distribution panel will be placed.");
+                        targetWall = curDoc.GetElement(wallRef) as Wall;
                     }
                     catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
-                }
 
-                if (panelGroup != null && targetWall != null && insertPoint != null)
-                {
-                    // transaction 2: place a new instance of the group at the picked point and show the detail group
-                    using (Transaction t13b = new Transaction(curDoc, "Place Distribution Panel"))
+                    // prompt the user to pick the exact location on that wall
+                    XYZ insertPoint = null;
+                    if (targetWall != null)
                     {
-                        t13b.Start();
-                        PlaceDistributionPanel(curDoc, uidoc, panelGroup, insertPoint, targetWall);
-                        t13b.Commit();
+                        try
+                        {
+                            insertPoint = uidoc.Selection.PickPoint(
+                                "Pick the location on the wall for the distribution panel.");
+                        }
+                        catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
                     }
 
-                    // create notification message
-                    string panelMsg = "The data distribution panel was placed in the Utility Room. Verify the position and ungroup if needed.";
+                    if (panelGroup != null && targetWall != null && insertPoint != null)
+                    {
+                        // transaction 2: place a new instance of the group at the picked point and show the detail group
+                        using (Transaction t13b = new Transaction(curDoc, "Place Distribution Panel"))
+                        {
+                            t13b.Start();
+                            PlaceDistributionPanel(curDoc, uidoc, panelGroup, insertPoint, targetWall);
+                            t13b.Commit();
+                        }
 
-                    // notify the user of panel placement
-                    Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel", panelMsg);
+                        // create notification message
+                        string panelMsg = "The data distribution panel was placed in the Utility Room. Verify the position and ungroup if needed.";
+
+                        // notify the user of panel placement
+                        Utils.TaskDialogInformation("Q2 Revisions", "Move Distribution Panel", panelMsg);
+                    }
                 }
-            }
+
+            } // end else: distribution panel exists
 
             #endregion
 
