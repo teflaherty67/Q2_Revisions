@@ -1297,12 +1297,13 @@ namespace Q2_Revisions
             // return null if the level is not found
             if (firstFloor == null) return null;
 
-            // find and return a ViewPlan associated with Main Level whose name contains "Electrical"
+            // find and return a ViewPlan associated with Main Level whose name contains "Electrical" or "/E/"
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
                 .FirstOrDefault(v => v.GenLevel?.Id == firstFloor.Id &&
-                                     v.Name.IndexOf("Electrical", StringComparison.OrdinalIgnoreCase) >= 0);
+                                     (v.Name.IndexOf("Electrical", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                      v.Name.IndexOf("/E/", StringComparison.OrdinalIgnoreCase) >= 0));
         }
 
         /// <summary>
@@ -1320,12 +1321,13 @@ namespace Q2_Revisions
             // return null if the level is not found
             if (level == null) return null;
 
-            // find and return a ViewPlan associated with that level whose name contains "Electrical"
+            // find and return a ViewPlan associated with that level whose name contains "Electrical" or "/E/"
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
                 .FirstOrDefault(v => v.GenLevel?.Id == level.Id &&
-                                     v.Name.IndexOf("Electrical", StringComparison.OrdinalIgnoreCase) >= 0);
+                                     (v.Name.IndexOf("Electrical", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                      v.Name.IndexOf("/E/", StringComparison.OrdinalIgnoreCase) >= 0));
         }
 
         /// <summary>
